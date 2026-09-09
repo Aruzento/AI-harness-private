@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using MyAgent.Messages;
 
 namespace MyAgent.Llm;
 
@@ -18,55 +19,72 @@ public class OpenRouterLlmClient : ILlmClient
         _apiKey = apiKey;
     }
 
-    public async Task<string> SendAsync(string prompt)
-    {
-        var requestBody = new
+    public async Task<string> SendAsync(
+    IReadOnlyList<Message> messages)
+{
+    var apiMessages = messages
+        .Select(message => new
         {
-            model = "openrouter/free",
-
-            messages = new[]
+            role = message.Role switch
             {
-                new
-                {
-                    role = "user",
-                    content = prompt
-                }
-            }
-        };
+                MessageRole.System => "system",
+                MessageRole.User => "user",
+                MessageRole.Assistant => "assistant",
+                MessageRole.Tool => "tool",
+                _ => throw new ArgumentOutOfRangeException()
+            },
 
-        string json = JsonSerializer.Serialize(requestBody);
+            content = message.Content
+        })
+        .ToArray();
 
-        using var request =
-            new HttpRequestMessage(HttpMethod.Post, Endpoint);
+    var requestBody = new
+    {
+        model = "openrouter/free",
+        messages = apiMessages
+    };
 
-        request.Headers.Authorization =
-            new AuthenticationHeaderValue("Bearer", _apiKey);
+    string json =
+        JsonSerializer.Serialize(requestBody);
 
-        request.Content =
-            new StringContent(json, Encoding.UTF8, "application/json");
+    using var request =
+        new HttpRequestMessage(
+            HttpMethod.Post,
+            Endpoint);
 
-        using HttpResponseMessage response =
-            await _httpClient.SendAsync(request);
+    request.Headers.Authorization =
+        new AuthenticationHeaderValue(
+            "Bearer",
+            _apiKey);
 
-        string responseJson =
-            await response.Content.ReadAsStringAsync();
+    request.Content =
+        new StringContent(
+            json,
+            Encoding.UTF8,
+            "application/json");
 
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new HttpRequestException(
-                $"OpenRouter error {(int)response.StatusCode}: {responseJson}");
-        }
+    using HttpResponseMessage response =
+        await _httpClient.SendAsync(request);
 
-        using JsonDocument document =
-            JsonDocument.Parse(responseJson);
+    string responseJson =
+        await response.Content.ReadAsStringAsync();
 
-        string? answer = document
-            .RootElement
-            .GetProperty("choices")[0]
-            .GetProperty("message")
-            .GetProperty("content")
-            .GetString();
+    if (!response.IsSuccessStatusCode)
+    {
+        throw new HttpRequestException(
+            $"OpenRouter error {(int)response.StatusCode}: {responseJson}");
+    }
 
-        return answer ?? string.Empty;
+    using JsonDocument document =
+        JsonDocument.Parse(responseJson);
+
+    string? answer = document
+        .RootElement
+        .GetProperty("choices")[0]
+        .GetProperty("message")
+        .GetProperty("content")
+        .GetString();
+
+    return (answer ?? string.Empty).Trim();
     }
 }

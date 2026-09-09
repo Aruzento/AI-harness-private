@@ -1,6 +1,9 @@
+using MyAgent.Messages;
+
 namespace MyAgent.Llm;
 
 public interface ILlmClient
 {
-    Task<string> SendAsync(string prompt);
+    Task<string> SendAsync(
+        IReadOnlyList<Message> messages);
 }
