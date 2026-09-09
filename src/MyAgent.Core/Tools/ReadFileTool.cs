@@ -43,7 +43,8 @@ public class ReadFileTool : ITool
     }
 
     public async Task<ToolResult> ExecuteAsync(
-        JsonElement arguments)
+        JsonElement arguments,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -73,9 +74,14 @@ public class ReadFileTool : ITool
 
             string content =
                 await File.ReadAllTextAsync(
-                    fullPath);
+                    fullPath,
+                    cancellationToken);
 
             return ToolResult.Ok(content);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception exception)
         {

@@ -11,5 +11,6 @@ public interface ITool
     JsonElement ParametersSchema { get; }
 
     Task<ToolResult> ExecuteAsync(
-        JsonElement arguments);
+        JsonElement arguments,
+        CancellationToken cancellationToken = default);
 }

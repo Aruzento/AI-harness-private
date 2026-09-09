@@ -24,7 +24,8 @@ public class ToolRegistry
 
     public async Task<ToolResult> ExecuteAsync(
         string toolName,
-        JsonElement arguments)
+        JsonElement arguments,
+        CancellationToken cancellationToken = default)
     {
         if (!_tools.TryGetValue(
                 toolName,
@@ -35,6 +36,7 @@ public class ToolRegistry
         }
 
         return await tool.ExecuteAsync(
-            arguments);
+            arguments,
+            cancellationToken);
     }
 }

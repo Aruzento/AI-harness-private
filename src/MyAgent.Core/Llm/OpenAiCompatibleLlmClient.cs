@@ -28,7 +28,8 @@ public class OpenAiCompatibleLlmClient : ILlmClient
 
     public async Task<LlmResponse> SendAsync(
         IReadOnlyList<Message> messages,
-        IReadOnlyCollection<ITool> tools)
+        IReadOnlyCollection<ITool> tools,
+        CancellationToken cancellationToken = default)
     {
         var apiMessages =
             messages
@@ -80,16 +81,18 @@ public class OpenAiCompatibleLlmClient : ILlmClient
 
         using HttpResponseMessage response =
             await _httpClient.SendAsync(
-                request);
+                request,
+                cancellationToken);
 
         string responseJson =
             await response.Content
-                .ReadAsStringAsync();
+                .ReadAsStringAsync(
+                    cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
             throw new HttpRequestException(
-                $"OpenRouter error {(int)response.StatusCode}: {responseJson}");
+                $"LLM provider error {(int)response.StatusCode}: {responseJson}");
         }
 
         using JsonDocument document =

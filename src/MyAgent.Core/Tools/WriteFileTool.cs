@@ -52,7 +52,8 @@ public class WriteFileTool : ITool
     }
 
     public async Task<ToolResult> ExecuteAsync(
-        JsonElement arguments)
+        JsonElement arguments,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -102,10 +103,15 @@ public class WriteFileTool : ITool
 
             await File.WriteAllTextAsync(
                 fullPath,
-                content);
+                content,
+                cancellationToken);
 
             return ToolResult.Ok(
                 $"File written: {path}");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception exception)
         {

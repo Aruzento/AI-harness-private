@@ -79,9 +79,38 @@ public sealed class ApprovalItem
             toolName;
     }
 
-    public Task<bool> WaitAsync()
+    public Task<bool> WaitAsync(
+        CancellationToken cancellationToken = default)
     {
-        return _completion.Task;
+        return _completion.Task
+            .WaitAsync(
+                cancellationToken);
+    }
+
+    public bool Cancel()
+    {
+        if (!_isPending)
+        {
+            return false;
+        }
+
+        _isPending =
+            false;
+
+        _decisionText =
+            "■ Остановлено";
+
+        PropertyChanged?.Invoke(
+            this,
+            new PropertyChangedEventArgs(
+                nameof(IsPending)));
+
+        PropertyChanged?.Invoke(
+            this,
+            new PropertyChangedEventArgs(
+                nameof(DecisionText)));
+
+        return _completion.TrySetCanceled();
     }
 
     public bool Resolve(

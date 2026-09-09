@@ -44,10 +44,14 @@ public class Agent
     }
 
     public async Task<LlmResponse> RunAsync(
-        string task)
+        string task,
+        CancellationToken cancellationToken = default)
     {
         var state =
             new AgentRunState();
+
+        cancellationToken
+            .ThrowIfCancellationRequested();
 
         LastRunState =
             state;
@@ -65,7 +69,8 @@ public class Agent
             LlmResponse response =
                 await _llmClient.SendAsync(
                     _history.Messages,
-                    _toolRegistry.Tools);
+                    _toolRegistry.Tools,
+                    cancellationToken);
 
             if (!response.HasToolCalls)
             {
@@ -87,68 +92,106 @@ public class Agent
                 response.Content,
                 response.ToolCalls);
 
-            foreach (ToolCall toolCall
-                     in response.ToolCalls)
+            for (int toolIndex = 0;
+                toolIndex < response.ToolCalls.Count;
+                toolIndex++)
             {
-                state.RegisterToolCall();
+                ToolCall toolCall =
+                    response.ToolCalls[
+                        toolIndex];
 
-                if (state.ToolCallCount >
-                    _policy.MaxToolCalls)
+                try
                 {
-                    throw new InvalidOperationException(
-                        "Agent exceeded maximum "
-                        + "number of tool calls: "
-                        + $"{_policy.MaxToolCalls}.");
-                }
+                    cancellationToken
+                        .ThrowIfCancellationRequested();
 
-                _observer.OnToolCall(
-                    toolCall);
+                    state.RegisterToolCall();
 
-                ToolResult toolResult;
-
-                if (_policy.RequiresApproval(
-                        toolCall.Name))
-                {
-                    bool approved =
-                        await _toolApproval.ApproveAsync(
-                            toolCall);
-
-                    if (!approved)
+                    if (state.ToolCallCount >
+                        _policy.MaxToolCalls)
                     {
-                        state.RegisterDeniedToolCall();
+                        throw new InvalidOperationException(
+                            "Agent exceeded maximum "
+                            + "number of tool calls: "
+                            + $"{_policy.MaxToolCalls}.");
+                    }
 
-                        toolResult =
-                            ToolResult.Fail(
-                                "Tool execution denied by user.");
+                    _observer.OnToolCall(
+                        toolCall);
+
+                    ToolResult toolResult;
+
+                    if (_policy.RequiresApproval(
+                            toolCall.Name))
+                    {
+                        bool approved =
+                            await _toolApproval.ApproveAsync(
+                                toolCall,
+                                cancellationToken);
+
+                        if (!approved)
+                        {
+                            state.RegisterDeniedToolCall();
+
+                            toolResult =
+                                ToolResult.Fail(
+                                    "Tool execution denied by user.");
+                        }
+                        else
+                        {
+                            toolResult =
+                                await _toolRegistry.ExecuteAsync(
+                                    toolCall.Name,
+                                    toolCall.Arguments,
+                                    cancellationToken);
+                        }
                     }
                     else
                     {
                         toolResult =
                             await _toolRegistry.ExecuteAsync(
                                 toolCall.Name,
-                                toolCall.Arguments);
+                                toolCall.Arguments,
+                                cancellationToken);
                     }
+
+                    string toolContent =
+                        toolResult.Success
+                            ? toolResult.Content
+                            : $"ERROR: {toolResult.Error}";
+
+                    _observer.OnToolResult(
+                        toolCall,
+                        toolResult);
+
+                    _history.AddTool(
+                        toolCall.Id,
+                        toolContent);
                 }
-                else
+                catch (OperationCanceledException)
+                    when (cancellationToken.IsCancellationRequested)
                 {
-                    toolResult =
-                        await _toolRegistry.ExecuteAsync(
-                            toolCall.Name,
-                            toolCall.Arguments);
+                    _history.AddTool(
+                        toolCall.Id,
+                        "ERROR: Tool execution cancelled by user.");
+
+                    for (int remainingIndex =
+                            toolIndex + 1;
+                        remainingIndex <
+                            response.ToolCalls.Count;
+                        remainingIndex++)
+                    {
+                        ToolCall remainingCall =
+                            response.ToolCalls[
+                                remainingIndex];
+
+                        _history.AddTool(
+                            remainingCall.Id,
+                            "ERROR: Tool execution cancelled before execution.");
+                    }
+
+                    throw;
                 }
-
-                string toolContent =
-                    toolResult.Success
-                        ? toolResult.Content
-                        : $"ERROR: {toolResult.Error}";
-
-                _observer.OnToolResult(
-                    toolCall,
-                    toolResult);
-
-                _history.AddTool(
-                    toolCall.Id,
-                    toolContent);
             }
         }
 

@@ -1,16 +1,16 @@
-﻿using System.IO;
+﻿using System.Collections.ObjectModel;
+using System.IO;
 using System.Net.Http;
+using System.Text.Json;
 using System.Windows;
+using System.Windows.Controls;
 using MyAgent.Agent;
 using MyAgent.Configuration;
 using MyAgent.Guardrails;
 using MyAgent.Llm;
+using MyAgent.Messages;
 using MyAgent.Tools;
 using MyAgent.Workspace;
-using System.Collections.ObjectModel;
-using System.Text.Json;
-using System.Windows.Controls;
-using MyAgent.Messages;
 
 using AgentCore = MyAgent.Agent.Agent;
 
@@ -24,6 +24,11 @@ public partial class MainWindow : Window
 
     private readonly HttpClient _httpClient;
     private readonly AgentCore _agent;
+
+    private bool _cancellationShownInline;
+
+    private CancellationTokenSource?
+        _runCancellation;
 
     public MainWindow()
     {
@@ -147,15 +152,17 @@ public partial class MainWindow : Window
                         .ScrollToEnd()));
     }
 
-    private Task<bool> RequestToolApprovalAsync(
-        ToolCall toolCall)
+    private async Task<bool> RequestToolApprovalAsync(
+        ToolCall toolCall,
+        CancellationToken cancellationToken)
     {
         if (!Dispatcher.CheckAccess())
         {
-            return Dispatcher.Invoke(
+            return await Dispatcher.Invoke(
                 () =>
                     RequestToolApprovalAsync(
-                        toolCall));
+                        toolCall,
+                        cancellationToken));
         }
 
         var item =
@@ -167,7 +174,20 @@ public partial class MainWindow : Window
         AddChatItem(
             item);
 
-        return item.WaitAsync();
+        try
+        {
+            return await item.WaitAsync(
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            item.Cancel();
+
+            _cancellationShownInline =
+                true;
+
+            throw;
+        }
     }
 
     private static string DescribeApproval(
@@ -199,6 +219,11 @@ public partial class MainWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        if (_runCancellation is not null)
+        {
+            return;
+        }
+
         string input =
             InputTextBox.Text;
 
@@ -209,23 +234,48 @@ public partial class MainWindow : Window
 
         InputTextBox.Clear();
 
+        _cancellationShownInline =
+            false;
+
         AddChatItem(
             new UserMessageItem(
                 input));
 
-        SendButton.IsEnabled =
-            false;
+        _runCancellation =
+            new CancellationTokenSource();
+
+        CancellationToken cancellationToken =
+            _runCancellation.Token;
+
+        SendButton.Visibility =
+            Visibility.Collapsed;
+
+        StopButton.Visibility =
+            Visibility.Visible;
+
+        StopButton.IsEnabled =
+            true;
 
         try
         {
             LlmResponse response =
                 await _agent.RunAsync(
-                    input);
+                    input,
+                    cancellationToken);
 
             AddChatItem(
                 new AssistantMessageItem(
                     response.Content
                     ?? string.Empty));
+        }
+        catch (OperationCanceledException)
+        {
+            if (!_cancellationShownInline)
+            {
+                AddChatItem(
+                    new ActivityItem(
+                        "■ Выполнение остановлено"));
+            }
         }
         catch (Exception exception)
         {
@@ -236,19 +286,22 @@ public partial class MainWindow : Window
         }
         finally
         {
-            SendButton.IsEnabled =
+            _runCancellation?.Dispose();
+
+            _runCancellation =
+                null;
+
+            StopButton.Visibility =
+                Visibility.Collapsed;
+
+            SendButton.Visibility =
+                Visibility.Visible;
+
+            StopButton.IsEnabled =
                 true;
 
             InputTextBox.Focus();
         }
-    }
-
-    protected override void OnClosed(
-        EventArgs e)
-    {
-        _httpClient.Dispose();
-
-        base.OnClosed(e);
     }
 
     private void ApproveTool_Click(
@@ -286,5 +339,33 @@ public partial class MainWindow : Window
 
         item.Resolve(
             approved);
+    }
+
+    private void StopButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        StopButton.IsEnabled =
+            false;
+
+        _runCancellation?.Cancel();
+    }
+
+    protected override void OnClosed(
+        EventArgs e)
+    {
+        CancellationTokenSource?
+            cancellation =
+                _runCancellation;
+
+        _runCancellation =
+            null;
+
+        cancellation?.Cancel();
+        cancellation?.Dispose();
+
+        _httpClient.Dispose();
+
+        base.OnClosed(e);
     }
 }

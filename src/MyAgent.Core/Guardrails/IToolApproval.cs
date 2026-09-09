@@ -5,5 +5,6 @@ namespace MyAgent.Guardrails;
 public interface IToolApproval
 {
     Task<bool> ApproveAsync(
-        ToolCall toolCall);
+        ToolCall toolCall,
+        CancellationToken cancellationToken = default);
 }

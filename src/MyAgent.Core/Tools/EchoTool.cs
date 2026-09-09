@@ -32,7 +32,8 @@ public class EchoTool : ITool
             });
 
     public Task<ToolResult> ExecuteAsync(
-        JsonElement arguments)
+        JsonElement arguments,
+        CancellationToken cancellationToken = default)
     {
         if (arguments.ValueKind !=
             JsonValueKind.Object)

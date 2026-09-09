@@ -39,7 +39,8 @@ public class ListFilesTool : ITool
     }
 
     public Task<ToolResult> ExecuteAsync(
-        JsonElement arguments)
+        JsonElement arguments,
+        CancellationToken cancellationToken = default)
     {
         try
         {

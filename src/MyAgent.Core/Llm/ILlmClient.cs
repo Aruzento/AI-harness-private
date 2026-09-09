@@ -7,5 +7,6 @@ public interface ILlmClient
 {
     Task<LlmResponse> SendAsync(
         IReadOnlyList<Message> messages,
-        IReadOnlyCollection<ITool> tools);
+        IReadOnlyCollection<ITool> tools,
+        CancellationToken cancellationToken = default);
 }

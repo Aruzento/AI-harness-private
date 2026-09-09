@@ -7,8 +7,10 @@ public class ConsoleToolApproval
     : IToolApproval
 {
     public Task<bool> ApproveAsync(
-        ToolCall toolCall)
+        ToolCall toolCall,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         Console.WriteLine();
 
         Console.WriteLine(

@@ -1,7 +1,7 @@
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using MyAgent.Workspace;
-using System.Text;
 
 namespace MyAgent.Tools;
 
@@ -43,8 +43,8 @@ public class TerminalTool : ITool
             });
 
     public TerminalTool(
-    AgentWorkspace workspace,
-    int timeoutSeconds)
+        AgentWorkspace workspace,
+        int timeoutSeconds)
     {
         if (timeoutSeconds <= 0)
         {
@@ -52,12 +52,16 @@ public class TerminalTool : ITool
                 nameof(timeoutSeconds));
         }
 
-        _workspace = workspace;
-        _timeoutSeconds = timeoutSeconds;
+        _workspace =
+            workspace;
+
+        _timeoutSeconds =
+            timeoutSeconds;
     }
 
     public async Task<ToolResult> ExecuteAsync(
-        JsonElement arguments)
+        JsonElement arguments,
+        CancellationToken cancellationToken = default)
     {
         if (!arguments.TryGetProperty(
                 "command",
@@ -83,7 +87,8 @@ public class TerminalTool : ITool
         var startInfo =
             new ProcessStartInfo
             {
-                FileName = "powershell.exe",
+                FileName =
+                    "powershell.exe",
 
                 WorkingDirectory =
                     _workspace.RootPath,
@@ -102,7 +107,7 @@ public class TerminalTool : ITool
 
                 CreateNoWindow =
                     true,
-                
+
                 StandardOutputEncoding =
                     Encoding.UTF8,
 
@@ -132,11 +137,15 @@ public class TerminalTool : ITool
         using var process =
             new Process
             {
-                StartInfo = startInfo
+                StartInfo =
+                    startInfo
             };
 
         try
         {
+            cancellationToken
+                .ThrowIfCancellationRequested();
+
             process.Start();
 
             Task<string> stdoutTask =
@@ -152,10 +161,31 @@ public class TerminalTool : ITool
                     TimeSpan.FromSeconds(
                         _timeoutSeconds));
 
+            using var linkedCancellation =
+                CancellationTokenSource
+                    .CreateLinkedTokenSource(
+                        cancellationToken,
+                        timeout.Token);
+
             try
             {
                 await process.WaitForExitAsync(
-                    timeout.Token);
+                    linkedCancellation.Token);
+            }
+            catch (OperationCanceledException)
+                when (cancellationToken
+                    .IsCancellationRequested)
+            {
+                try
+                {
+                    process.Kill(
+                        entireProcessTree: true);
+                }
+                catch
+                {
+                }
+
+                throw;
             }
             catch (OperationCanceledException)
             {
@@ -203,6 +233,10 @@ public class TerminalTool : ITool
 
             return ToolResult.Ok(
                 result);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception exception)
         {
