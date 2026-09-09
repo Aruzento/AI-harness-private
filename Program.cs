@@ -2,6 +2,7 @@ using MyAgent.Agent;
 using MyAgent.Llm;
 using MyAgent.Tools;
 using MyAgent.Workspace;
+using MyAgent.Guardrails;
 
 string? apiKey =
     Environment.GetEnvironmentVariable(
@@ -63,10 +64,20 @@ toolRegistry.Register(
     new TerminalTool(
         workspace));
 
+var policy =
+    new AgentPolicy(
+        maxSteps: 10,
+        maxToolCalls: 20);
+
+IToolApproval toolApproval =
+    new ConsoleToolApproval();
+
 var agent =
     new Agent(
         llmClient,
         toolRegistry,
+        policy,
+        toolApproval,
         systemPrompt);
 
 Console.WriteLine(
@@ -116,6 +127,17 @@ while (true)
 
         Console.WriteLine(
             $"LLM: {result.Content ?? "<empty>"}");
+        
+        if (agent.LastRunState is not null)
+        {
+            Console.WriteLine();
+
+            Console.WriteLine(
+                "[State: "
+                + $"steps={agent.LastRunState.StepCount}, "
+                + $"toolCalls={agent.LastRunState.ToolCallCount}, "
+                + $"denied={agent.LastRunState.DeniedToolCallCount}]");
+        }
 
         Console.WriteLine();
     }
