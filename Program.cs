@@ -59,6 +59,10 @@ toolRegistry.Register(
     new WriteFileTool(
         workspace));
 
+toolRegistry.Register(
+    new TerminalTool(
+        workspace));
+
 var agent =
     new Agent(
         llmClient,
