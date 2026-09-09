@@ -7,6 +7,7 @@ using MyAgent.Guardrails;
 using MyAgent.Llm;
 using MyAgent.Tools;
 using MyAgent.Workspace;
+using System.Collections.ObjectModel;
 
 using AgentCore = MyAgent.Agent.Agent;
 
@@ -14,12 +15,19 @@ namespace MyAgent.Desktop;
 
 public partial class MainWindow : Window
 {
+    private readonly ObservableCollection<ChatItem>
+        _items =
+            new();
+
     private readonly HttpClient _httpClient;
     private readonly AgentCore _agent;
 
     public MainWindow()
     {
         InitializeComponent();
+
+        ConversationItemsControl.ItemsSource =
+            _items;
 
         string? apiKey =
             Environment.GetEnvironmentVariable(
@@ -92,7 +100,8 @@ public partial class MainWindow : Window
             new DesktopToolApproval();
 
         IAgentObserver observer =
-            new DesktopAgentObserver();
+            new DesktopAgentObserver(
+                AddActivity);
 
         _agent =
             new AgentCore(
@@ -102,6 +111,36 @@ public partial class MainWindow : Window
                 toolApproval,
                 observer,
                 systemPrompt);
+    }
+
+    private void AddActivity(
+        string text)
+    {
+        AddChatItem(
+            new ActivityItem(
+                text));
+    }
+
+    private void AddChatItem(
+        ChatItem item)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Invoke(
+                () => AddChatItem(
+                    item));
+
+            return;
+        }
+
+        _items.Add(
+            item);
+
+        Dispatcher.BeginInvoke(
+            new Action(
+                () =>
+                    ConversationScrollViewer
+                        .ScrollToEnd()));
     }
 
     private async void SendButton_Click(
@@ -118,11 +157,9 @@ public partial class MainWindow : Window
 
         InputTextBox.Clear();
 
-        ConversationTextBox.AppendText(
-            $"Вы:{Environment.NewLine}"
-            + input
-            + Environment.NewLine
-            + Environment.NewLine);
+        AddChatItem(
+            new UserMessageItem(
+                input));
 
         SendButton.IsEnabled =
             false;
@@ -133,26 +170,22 @@ public partial class MainWindow : Window
                 await _agent.RunAsync(
                     input);
 
-            ConversationTextBox.AppendText(
-                $"AI:{Environment.NewLine}"
-                + response.Content
-                + Environment.NewLine
-                + Environment.NewLine);
+            AddChatItem(
+                new AssistantMessageItem(
+                    response.Content
+                    ?? string.Empty));
         }
         catch (Exception exception)
         {
-            ConversationTextBox.AppendText(
-                $"Ошибка:{Environment.NewLine}"
-                + exception.Message
-                + Environment.NewLine
-                + Environment.NewLine);
+            AddChatItem(
+                new ActivityItem(
+                    "✗ Ошибка: "
+                    + exception.Message));
         }
         finally
         {
             SendButton.IsEnabled =
                 true;
-
-            ConversationTextBox.ScrollToEnd();
 
             InputTextBox.Focus();
         }
