@@ -1,25 +1,26 @@
 using MyAgent.Agent;
+using MyAgent.Cli;
+using MyAgent.Configuration;
+using MyAgent.Guardrails;
 using MyAgent.Llm;
 using MyAgent.Tools;
 using MyAgent.Workspace;
-using MyAgent.Guardrails;
-using MyAgent.Cli;
-using MyAgent.Configuration;
+
+HarnessOptions options =
+    HarnessOptions.Load();
 
 string? apiKey =
     Environment.GetEnvironmentVariable(
-        "GROQ_API_KEY");
+        options.ApiKeyEnvironmentVariable);
 
 if (string.IsNullOrWhiteSpace(apiKey))
 {
     Console.WriteLine(
-        "Не найдена переменная окружения GROQ_API_KEY.");
+        "Не найдена переменная окружения "
+        + $"{options.ApiKeyEnvironmentVariable}.");
 
     return;
 }
-
-HarnessOptions options =
-    HarnessOptions.FromEnvironment();
 
 string systemPromptPath =
     Path.Combine(
@@ -152,6 +153,12 @@ while (true)
         
         Console.WriteLine(
             $"Version: {HarnessVersion.Current}");
+
+        Console.WriteLine(
+            $"API key env: {options.ApiKeyEnvironmentVariable}");
+
+        Console.WriteLine(
+            $"Settings: {HarnessOptions.SettingsFilePath}");
 
         Console.WriteLine(
             "Tools: "

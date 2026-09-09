@@ -23,7 +23,10 @@ public partial class MainWindow : Window
             new();
 
     private readonly HttpClient _httpClient;
-    private readonly AgentCore _agent;
+    private readonly string _systemPrompt;
+
+    private AgentCore _agent;
+    private HarnessOptions _options;
 
     private bool _cancellationShownInline;
 
@@ -36,22 +39,12 @@ public partial class MainWindow : Window
 
         Title =
             $"AI Harness v{HarnessVersion.Current}";
-            
+
         ConversationItemsControl.ItemsSource =
             _items;
 
-        string? apiKey =
-            Environment.GetEnvironmentVariable(
-                "GROQ_API_KEY");
-
-        if (string.IsNullOrWhiteSpace(apiKey))
-        {
-            throw new InvalidOperationException(
-                "Не найдена переменная окружения GROQ_API_KEY.");
-        }
-
-        HarnessOptions options =
-            HarnessOptions.FromEnvironment();
+        _options =
+            HarnessOptions.Load();
 
         string systemPromptPath =
             Path.Combine(
@@ -64,12 +57,33 @@ public partial class MainWindow : Window
                 $"Не найден system prompt: {systemPromptPath}");
         }
 
-        string systemPrompt =
+        _systemPrompt =
             File.ReadAllText(
                 systemPromptPath);
 
         _httpClient =
             new HttpClient();
+
+        _agent =
+            CreateAgent(
+                _options);
+
+        UpdateStatus();
+    }
+
+    private AgentCore CreateAgent(
+        HarnessOptions options)
+    {
+        string? apiKey =
+            Environment.GetEnvironmentVariable(
+                options.ApiKeyEnvironmentVariable);
+
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            throw new InvalidOperationException(
+                "Не найдена переменная окружения "
+                + $"{options.ApiKeyEnvironmentVariable}.");
+        }
 
         ILlmClient llmClient =
             new OpenAiCompatibleLlmClient(
@@ -115,14 +129,21 @@ public partial class MainWindow : Window
             new DesktopAgentObserver(
                 AddActivity);
 
-        _agent =
-            new AgentCore(
-                llmClient,
-                toolRegistry,
-                policy,
-                toolApproval,
-                observer,
-                systemPrompt);
+        return new AgentCore(
+            llmClient,
+            toolRegistry,
+            policy,
+            toolApproval,
+            observer,
+            _systemPrompt);
+    }
+
+    private void UpdateStatus()
+    {
+        StatusTextBlock.Text =
+            _options.Model
+            + " · "
+            + _options.WorkspacePath;
     }
 
     private void AddActivity(
@@ -218,6 +239,71 @@ public partial class MainWindow : Window
             .GetRawText();
     }
 
+    private void SettingsButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_runCancellation is not null)
+        {
+            return;
+        }
+
+        var settingsWindow =
+            new SettingsWindow(
+                _options)
+            {
+                Owner =
+                    this
+            };
+
+        bool? result =
+            settingsWindow.ShowDialog();
+
+        if (result != true
+            ||
+            settingsWindow.SelectedOptions
+                is null)
+        {
+            return;
+        }
+
+        HarnessOptions newOptions =
+            settingsWindow.SelectedOptions;
+
+        try
+        {
+            AgentCore newAgent =
+                CreateAgent(
+                    newOptions);
+
+            HarnessOptions.Save(
+                newOptions);
+
+            _options =
+                newOptions;
+
+            _agent =
+                newAgent;
+
+            _items.Clear();
+
+            AddActivity(
+                "✓ Настройки применены. "
+                + "Начата новая сессия.");
+
+            UpdateStatus();
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                this,
+                exception.Message,
+                "Не удалось применить настройки",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
     private async void SendButton_Click(
         object sender,
         RoutedEventArgs e)
@@ -258,6 +344,9 @@ public partial class MainWindow : Window
 
         StopButton.IsEnabled =
             true;
+
+        SettingsButton.IsEnabled =
+            false;
 
         try
         {
@@ -301,6 +390,9 @@ public partial class MainWindow : Window
                 Visibility.Visible;
 
             StopButton.IsEnabled =
+                true;
+
+            SettingsButton.IsEnabled =
                 true;
 
             InputTextBox.Focus();
