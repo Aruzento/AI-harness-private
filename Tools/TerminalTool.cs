@@ -7,7 +7,7 @@ namespace MyAgent.Tools;
 
 public class TerminalTool : ITool
 {
-    private const int TimeoutSeconds = 15;
+    private readonly int _timeoutSeconds;
 
     private readonly AgentWorkspace _workspace;
 
@@ -43,9 +43,17 @@ public class TerminalTool : ITool
             });
 
     public TerminalTool(
-        AgentWorkspace workspace)
+    AgentWorkspace workspace,
+    int timeoutSeconds)
     {
+        if (timeoutSeconds <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(timeoutSeconds));
+        }
+
         _workspace = workspace;
+        _timeoutSeconds = timeoutSeconds;
     }
 
     public async Task<ToolResult> ExecuteAsync(
@@ -142,7 +150,7 @@ public class TerminalTool : ITool
             using var timeout =
                 new CancellationTokenSource(
                     TimeSpan.FromSeconds(
-                        TimeoutSeconds));
+                        _timeoutSeconds));
 
             try
             {
@@ -161,7 +169,7 @@ public class TerminalTool : ITool
                 }
 
                 return ToolResult.Fail(
-                    $"Command timed out after {TimeoutSeconds} seconds.");
+                    $"Command timed out after {_timeoutSeconds} seconds.");
             }
 
             string stdout =

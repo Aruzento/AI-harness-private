@@ -6,20 +6,24 @@ using MyAgent.Tools;
 
 namespace MyAgent.Llm;
 
-public class OpenRouterLlmClient : ILlmClient
+public class OpenAiCompatibleLlmClient : ILlmClient
 {
-    private const string Endpoint =
-        "https://openrouter.ai/api/v1/chat/completions";
+    private readonly string _endpoint;
 
     private readonly HttpClient _httpClient;
+    private readonly string _model;
     private readonly string _apiKey;
 
-    public OpenRouterLlmClient(
+    public OpenAiCompatibleLlmClient(
         HttpClient httpClient,
-        string apiKey)
+        string apiKey,
+        string endpoint,
+        string model)
     {
         _httpClient = httpClient;
         _apiKey = apiKey;
+        _endpoint = endpoint;
+        _model = model;
     }
 
     public async Task<LlmResponse> SendAsync(
@@ -48,7 +52,7 @@ public class OpenRouterLlmClient : ILlmClient
 
         var requestBody = new
         {
-            model = "openrouter/free",
+            model = _model,
             messages = apiMessages,
             tools = apiTools,
             tool_choice = "auto"
@@ -61,7 +65,7 @@ public class OpenRouterLlmClient : ILlmClient
         using var request =
             new HttpRequestMessage(
                 HttpMethod.Post,
-                Endpoint);
+                _endpoint);
 
         request.Headers.Authorization =
             new AuthenticationHeaderValue(

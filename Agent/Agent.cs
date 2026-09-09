@@ -65,6 +65,15 @@ public class Agent
 
             if (!response.HasToolCalls)
             {
+                if (string.IsNullOrWhiteSpace(
+                        response.Content))
+                {
+                    Console.WriteLine(
+                        "[Empty response: retrying]");
+
+                    continue;
+                }
+
                 _history.AddAssistant(
                     response.Content);
 
