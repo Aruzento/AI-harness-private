@@ -3,6 +3,7 @@ using MyAgent.Llm;
 using MyAgent.Tools;
 using MyAgent.Workspace;
 using MyAgent.Guardrails;
+using MyAgent.Cli;
 using MyAgent.Configuration;
 
 string? apiKey =
@@ -79,16 +80,20 @@ var policy =
 IToolApproval toolApproval =
     new ConsoleToolApproval();
 
+IAgentObserver observer =
+    new ConsoleAgentObserver();
+
 var agent =
     new Agent(
         llmClient,
         toolRegistry,
         policy,
         toolApproval,
+        observer,
         systemPrompt);
 
 Console.WriteLine(
-    "AI Harness v0.1.0 запущен.");
+    "AI Harness v0.1.1 запущен.");
 
 Console.WriteLine(
     "Команды:");

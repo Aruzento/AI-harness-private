@@ -1,6 +1,7 @@
+using MyAgent.Guardrails;
 using MyAgent.Messages;
 
-namespace MyAgent.Guardrails;
+namespace MyAgent.Cli;
 
 public class ConsoleToolApproval
     : IToolApproval

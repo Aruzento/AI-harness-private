@@ -14,6 +14,8 @@ public class Agent
     private readonly IToolApproval _toolApproval;
     private readonly ConversationHistory _history;
 
+    private readonly IAgentObserver _observer;
+
     public AgentRunState? LastRunState
     {
         get;
@@ -25,12 +27,14 @@ public class Agent
         ToolRegistry toolRegistry,
         AgentPolicy policy,
         IToolApproval toolApproval,
+        IAgentObserver observer,
         string systemPrompt)
     {
         _llmClient = llmClient;
         _toolRegistry = toolRegistry;
         _policy = policy;
         _toolApproval = toolApproval;
+        _observer = observer;
 
         _history =
             new ConversationHistory();
@@ -55,8 +59,8 @@ public class Agent
         {
             state.BeginStep();
 
-            Console.WriteLine(
-                $"[Agent step: {state.StepCount}]");
+            _observer.OnStepStarted(
+                state.StepCount);
 
             LlmResponse response =
                 await _llmClient.SendAsync(
@@ -68,8 +72,7 @@ public class Agent
                 if (string.IsNullOrWhiteSpace(
                         response.Content))
                 {
-                    Console.WriteLine(
-                        "[Empty response: retrying]");
+                    _observer.OnEmptyResponseRetry();
 
                     continue;
                 }
@@ -98,8 +101,8 @@ public class Agent
                         + $"{_policy.MaxToolCalls}.");
                 }
 
-                Console.WriteLine(
-                    $"[Tool call: {toolCall.Name}]");
+                _observer.OnToolCall(
+                    toolCall);
 
                 ToolResult toolResult;
 
@@ -139,8 +142,9 @@ public class Agent
                         ? toolResult.Content
                         : $"ERROR: {toolResult.Error}";
 
-                Console.WriteLine(
-                    $"[Tool result: {toolContent}]");
+                _observer.OnToolResult(
+                    toolCall,
+                    toolResult);
 
                 _history.AddTool(
                     toolCall.Id,
