@@ -1,6 +1,5 @@
 using MyAgent.Agent;
 using MyAgent.Llm;
-using System.Text.Json;
 using MyAgent.Tools;
 
 string? apiKey =
@@ -40,25 +39,23 @@ ILlmClient llmClient =
         httpClient,
         apiKey);
 
-var agent =
-    new Agent(
-        llmClient,
-        systemPrompt);
-
 var toolRegistry =
     new ToolRegistry();
 
 toolRegistry.Register(
     new EchoTool());
 
+var agent =
+    new Agent(
+        llmClient,
+        toolRegistry,
+        systemPrompt);
+
 Console.WriteLine(
     "AI Harness запущен.");
 
 Console.WriteLine(
     "Команды:");
-
-Console.WriteLine(
-    "/echo <текст> — тестовый tool");
 
 Console.WriteLine(
     "/exit — выход");
@@ -89,46 +86,6 @@ while (true)
         continue;
     }
 
-    const string echoPrefix =
-    "/echo ";
-
-if (input.StartsWith(
-        echoPrefix,
-        StringComparison.OrdinalIgnoreCase))
-{
-    string text =
-        input[echoPrefix.Length..];
-
-    JsonElement arguments =
-        JsonSerializer.SerializeToElement(
-            new
-            {
-                text
-            });
-
-    ToolResult toolResult =
-        await toolRegistry.ExecuteAsync(
-            "echo",
-            arguments);
-
-    Console.WriteLine();
-
-    if (toolResult.Success)
-    {
-        Console.WriteLine(
-            $"Tool echo: {toolResult.Content}");
-    }
-    else
-    {
-        Console.WriteLine(
-            $"Ошибка tool: {toolResult.Error}");
-    }
-
-    Console.WriteLine();
-
-    continue;
-}
-
     try
     {
         LlmResponse result =
@@ -140,7 +97,7 @@ if (input.StartsWith(
             $"[Model: {result.Model}]");
 
         Console.WriteLine(
-            $"LLM: {result.Content}");
+            $"LLM: {result.Content ?? "<empty>"}");
 
         Console.WriteLine();
     }
