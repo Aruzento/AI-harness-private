@@ -6,6 +6,8 @@ namespace MyAgent.Agent;
 
 public class Agent
 {
+    private const int MaxSteps = 10;
+
     private readonly ILlmClient _llmClient;
     private readonly ToolRegistry _toolRegistry;
     private readonly ConversationHistory _history;
@@ -26,63 +28,60 @@ public class Agent
     }
 
     public async Task<LlmResponse> RunAsync(
-    string task)
+        string task)
     {
         _history.AddUser(task);
 
-        LlmResponse response =
-            await _llmClient.SendAsync(
-                _history.Messages,
-                _toolRegistry.Tools);
-
-        if (!response.HasToolCalls)
-        {
-            _history.AddAssistant(
-                response.Content);
-
-            return response;
-        }
-
-        _history.AddAssistant(
-            response.Content,
-            response.ToolCalls);
-
-        foreach (ToolCall toolCall
-                in response.ToolCalls)
+        for (int step = 1;
+             step <= MaxSteps;
+             step++)
         {
             Console.WriteLine(
-                $"[Tool call: {toolCall.Name}]");
+                $"[Agent step: {step}]");
 
-            ToolResult toolResult =
-                await _toolRegistry.ExecuteAsync(
-                    toolCall.Name,
-                    toolCall.Arguments);
+            LlmResponse response =
+                await _llmClient.SendAsync(
+                    _history.Messages,
+                    _toolRegistry.Tools);
 
-            string toolContent =
-                toolResult.Success
-                    ? toolResult.Content
-                    : $"ERROR: {toolResult.Error}";
+            if (!response.HasToolCalls)
+            {
+                _history.AddAssistant(
+                    response.Content);
 
-            _history.AddTool(
-                toolCall.Id,
-                toolContent);
+                return response;
+            }
+
+            _history.AddAssistant(
+                response.Content,
+                response.ToolCalls);
+
+            foreach (ToolCall toolCall
+                     in response.ToolCalls)
+            {
+                Console.WriteLine(
+                    $"[Tool call: {toolCall.Name}]");
+
+                ToolResult toolResult =
+                    await _toolRegistry.ExecuteAsync(
+                        toolCall.Name,
+                        toolCall.Arguments);
+
+                string toolContent =
+                    toolResult.Success
+                        ? toolResult.Content
+                        : $"ERROR: {toolResult.Error}";
+
+                Console.WriteLine(
+                    $"[Tool result: {toolContent}]");
+
+                _history.AddTool(
+                    toolCall.Id,
+                    toolContent);
+            }
         }
 
-        LlmResponse finalResponse =
-            await _llmClient.SendAsync(
-                _history.Messages,
-                _toolRegistry.Tools);
-
-        if (finalResponse.HasToolCalls)
-        {
-            throw new InvalidOperationException(
-                "Model requested another tool call. "
-                + "Multi-step agent loop will be implemented in v0.0.6.");
-        }
-
-        _history.AddAssistant(
-            finalResponse.Content);
-
-        return finalResponse;
+        throw new InvalidOperationException(
+            $"Agent exceeded maximum number of steps: {MaxSteps}.");
     }
 }
