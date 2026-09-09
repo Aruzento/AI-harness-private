@@ -8,6 +8,9 @@ using MyAgent.Llm;
 using MyAgent.Tools;
 using MyAgent.Workspace;
 using System.Collections.ObjectModel;
+using System.Text.Json;
+using System.Windows.Controls;
+using MyAgent.Messages;
 
 using AgentCore = MyAgent.Agent.Agent;
 
@@ -97,7 +100,8 @@ public partial class MainWindow : Window
                 options.MaxToolCalls);
 
         IToolApproval toolApproval =
-            new DesktopToolApproval();
+            new DesktopToolApproval(
+                RequestToolApprovalAsync);
 
         IAgentObserver observer =
             new DesktopAgentObserver(
@@ -141,6 +145,54 @@ public partial class MainWindow : Window
                 () =>
                     ConversationScrollViewer
                         .ScrollToEnd()));
+    }
+
+    private Task<bool> RequestToolApprovalAsync(
+        ToolCall toolCall)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            return Dispatcher.Invoke(
+                () =>
+                    RequestToolApprovalAsync(
+                        toolCall));
+        }
+
+        var item =
+            new ApprovalItem(
+                toolCall.Name,
+                DescribeApproval(
+                    toolCall));
+
+        AddChatItem(
+            item);
+
+        return item.WaitAsync();
+    }
+
+    private static string DescribeApproval(
+        ToolCall toolCall)
+    {
+        if (toolCall.Name.Equals(
+                "run_terminal",
+                StringComparison.OrdinalIgnoreCase)
+            &&
+            toolCall.Arguments.ValueKind ==
+                JsonValueKind.Object
+            &&
+            toolCall.Arguments.TryGetProperty(
+                "command",
+                out JsonElement commandElement)
+            &&
+            commandElement.ValueKind ==
+                JsonValueKind.String)
+        {
+            return commandElement.GetString()
+                ?? string.Empty;
+        }
+
+        return toolCall.Arguments
+            .GetRawText();
     }
 
     private async void SendButton_Click(
@@ -197,5 +249,42 @@ public partial class MainWindow : Window
         _httpClient.Dispose();
 
         base.OnClosed(e);
+    }
+
+    private void ApproveTool_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        ResolveApproval(
+            sender,
+            approved: true);
+    }
+
+    private void DenyTool_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        ResolveApproval(
+            sender,
+            approved: false);
+    }
+
+    private static void ResolveApproval(
+        object sender,
+        bool approved)
+    {
+        if (sender is not Button button)
+        {
+            return;
+        }
+
+        if (button.DataContext
+            is not ApprovalItem item)
+        {
+            return;
+        }
+
+        item.Resolve(
+            approved);
     }
 }

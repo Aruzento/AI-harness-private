@@ -43,6 +43,13 @@ public class DesktopAgentObserver
     {
         if (!toolResult.Success)
         {
+            if (string.Equals(
+                toolResult.Error,
+                "Tool execution denied by user.",
+                StringComparison.Ordinal))
+        {
+            return;
+        }
             _addActivity(
                 "✗ "
                 + toolCall.Name
@@ -96,11 +103,7 @@ public class DesktopAgentObserver
                     "path"),
 
             "run_terminal" =>
-                "Выполняет команду: "
-                + Shorten(
-                    ReadArgument(
-                        toolCall,
-                        "command")),
+                "Запрашивает выполнение команды",
 
             _ =>
                 $"Вызывает {toolCall.Name}"
@@ -120,19 +123,5 @@ public class DesktopAgentObserver
         }
 
         return string.Empty;
-    }
-
-    private static string Shorten(
-        string text)
-    {
-        const int maxLength = 120;
-
-        if (text.Length <= maxLength)
-        {
-            return text;
-        }
-
-        return text[..maxLength]
-            + "...";
     }
 }
