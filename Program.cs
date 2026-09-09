@@ -1,6 +1,7 @@
 using MyAgent.Agent;
 using MyAgent.Llm;
 using MyAgent.Tools;
+using MyAgent.Workspace;
 
 string? apiKey =
     Environment.GetEnvironmentVariable(
@@ -39,11 +40,24 @@ ILlmClient llmClient =
         httpClient,
         apiKey);
 
+var workspace =
+    new AgentWorkspace(
+        "Workdir");
+
 var toolRegistry =
     new ToolRegistry();
 
 toolRegistry.Register(
-    new EchoTool());
+    new ListFilesTool(
+        workspace));
+
+toolRegistry.Register(
+    new ReadFileTool(
+        workspace));
+
+toolRegistry.Register(
+    new WriteFileTool(
+        workspace));
 
 var agent =
     new Agent(
