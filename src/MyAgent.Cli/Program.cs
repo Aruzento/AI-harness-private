@@ -93,7 +93,7 @@ var agent =
         systemPrompt);
 
 Console.WriteLine(
-    "AI Harness v0.1.1 запущен.");
+    $"AI Harness v{HarnessVersion.Current} запущен.");
 
 Console.WriteLine(
     "Команды:");
@@ -149,6 +149,9 @@ while (true)
         Console.WriteLine(
             "Terminal timeout: "
             + $"{options.TerminalTimeoutSeconds}s");
+        
+        Console.WriteLine(
+            $"Version: {HarnessVersion.Current}");
 
         Console.WriteLine(
             "Tools: "

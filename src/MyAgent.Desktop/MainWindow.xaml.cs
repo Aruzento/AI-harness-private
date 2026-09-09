@@ -34,6 +34,9 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
+        Title =
+            $"AI Harness v{HarnessVersion.Current}";
+            
         ConversationItemsControl.ItemsSource =
             _items;
 

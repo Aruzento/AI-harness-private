@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:MyAgent.Desktop"
-        Title="AI Harness v0.1.5"
+        Title="AI Harness"
         Height="700"
         Width="900"
         MinHeight="450"
@@ -43,8 +43,8 @@
                     FontWeight="SemiBold"
                     Margin="0,0,0,5" />
 
-                <TextBlock
-                    Text="{Binding Text}"
+                <local:MarkdownTextBlock
+                    Markdown="{Binding Text}"
                     FontSize="14"
                     TextWrapping="Wrap" />
 
