@@ -19,10 +19,10 @@ public class OpenRouterLlmClient : ILlmClient
         _apiKey = apiKey;
     }
 
-    public async Task<string> SendAsync(
+    public async Task<LlmResponse> SendAsync(
     IReadOnlyList<Message> messages)
-{
-    var apiMessages = messages
+    {
+        var apiMessages = messages
         .Select(message => new
         {
             role = message.Role switch
@@ -38,53 +38,66 @@ public class OpenRouterLlmClient : ILlmClient
         })
         .ToArray();
 
-    var requestBody = new
-    {
-        model = "openrouter/free",
-        messages = apiMessages
-    };
+        var requestBody = new
+        {
+            model = "openrouter/free",
+            messages = apiMessages
+        };
 
-    string json =
-        JsonSerializer.Serialize(requestBody);
+        string json =
+            JsonSerializer.Serialize(requestBody);
 
-    using var request =
-        new HttpRequestMessage(
-            HttpMethod.Post,
-            Endpoint);
+        using var request =
+            new HttpRequestMessage(
+                HttpMethod.Post,
+                Endpoint);
 
-    request.Headers.Authorization =
-        new AuthenticationHeaderValue(
-            "Bearer",
-            _apiKey);
+        request.Headers.Authorization =
+            new AuthenticationHeaderValue(
+                "Bearer",
+                _apiKey);
 
-    request.Content =
-        new StringContent(
-            json,
-            Encoding.UTF8,
-            "application/json");
+        request.Content =
+            new StringContent(
+                json,
+                Encoding.UTF8,
+                "application/json");
 
-    using HttpResponseMessage response =
-        await _httpClient.SendAsync(request);
+        using HttpResponseMessage response =
+            await _httpClient.SendAsync(request);
 
-    string responseJson =
-        await response.Content.ReadAsStringAsync();
+        string responseJson =
+            await response.Content.ReadAsStringAsync();
 
-    if (!response.IsSuccessStatusCode)
-    {
-        throw new HttpRequestException(
-            $"OpenRouter error {(int)response.StatusCode}: {responseJson}");
-    }
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException(
+                $"OpenRouter error {(int)response.StatusCode}: {responseJson}");
+        }
 
-    using JsonDocument document =
-        JsonDocument.Parse(responseJson);
+        using JsonDocument document =
+            JsonDocument.Parse(responseJson);
 
-    string? answer = document
-        .RootElement
-        .GetProperty("choices")[0]
-        .GetProperty("message")
-        .GetProperty("content")
-        .GetString();
+        JsonElement root =
+            document.RootElement;
 
-    return (answer ?? string.Empty).Trim();
+        string model =
+            root.TryGetProperty(
+                "model",
+                out JsonElement modelElement)
+                ? modelElement.GetString() ?? "unknown"
+                : "unknown";
+
+        string content =
+            root
+                .GetProperty("choices")[0]
+                .GetProperty("message")
+                .GetProperty("content")
+                .GetString()
+            ?? string.Empty;
+
+        return new LlmResponse(
+            model,
+            content.Trim());
     }
 }

@@ -4,6 +4,6 @@ namespace MyAgent.Llm;
 
 public interface ILlmClient
 {
-    Task<string> SendAsync(
+    Task<LlmResponse> SendAsync(
         IReadOnlyList<Message> messages);
 }

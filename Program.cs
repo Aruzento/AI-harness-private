@@ -131,11 +131,17 @@ if (input.StartsWith(
 
     try
     {
-        string result =
+        LlmResponse result =
             await agent.RunAsync(input);
 
         Console.WriteLine();
-        Console.WriteLine($"LLM: {result}");
+
+        Console.WriteLine(
+            $"[Model: {result.Model}]");
+
+        Console.WriteLine(
+            $"LLM: {result.Content}");
+
         Console.WriteLine();
     }
     catch (Exception exception)

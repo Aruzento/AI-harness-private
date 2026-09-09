@@ -18,16 +18,18 @@ public class Agent
         _history.AddSystem(systemPrompt);
     }
 
-    public async Task<string> RunAsync(string task)
+    public async Task<LlmResponse> RunAsync(
+    string task)
     {
         _history.AddUser(task);
 
-        string answer =
+        LlmResponse response =
             await _llmClient.SendAsync(
                 _history.Messages);
 
-        _history.AddAssistant(answer);
+        _history.AddAssistant(
+            response.Content);
 
-        return answer;
+        return response;
     }
 }
