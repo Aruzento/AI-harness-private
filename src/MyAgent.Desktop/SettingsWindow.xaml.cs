@@ -6,6 +6,11 @@ namespace MyAgent.Desktop;
 public partial class SettingsWindow
     : Window
 {
+    private readonly HarnessOptions _originalOptions;
+    private readonly LlmProfileManager _profileManager;
+
+    private LlmProfileCatalog _profileCatalog;
+
     public HarnessOptions?
         SelectedOptions
     {
@@ -13,19 +18,30 @@ public partial class SettingsWindow
         private set;
     }
 
+    public LlmProfileCatalog ProfileCatalog =>
+        _profileCatalog;
+
     public SettingsWindow(
-        HarnessOptions options)
+        HarnessOptions options,
+        LlmProfileManager profileManager,
+        LlmProfileCatalog profileCatalog)
     {
         InitializeComponent();
 
-        EndpointTextBox.Text =
-            options.LlmEndpoint;
+        _originalOptions =
+            options
+            ?? throw new ArgumentNullException(
+                nameof(options));
 
-        ModelTextBox.Text =
-            options.Model;
+        _profileManager =
+            profileManager
+            ?? throw new ArgumentNullException(
+                nameof(profileManager));
 
-        ApiKeyEnvironmentTextBox.Text =
-            options.ApiKeyEnvironmentVariable;
+        _profileCatalog =
+            profileCatalog
+            ?? throw new ArgumentNullException(
+                nameof(profileCatalog));
 
         WorkspaceTextBox.Text =
             options.WorkspacePath;
@@ -39,6 +55,147 @@ public partial class SettingsWindow
         TerminalTimeoutTextBox.Text =
             options.TerminalTimeoutSeconds
                 .ToString();
+
+        RefreshProfiles(
+            _profileCatalog.ActiveProfileId);
+    }
+
+    private async void AddProfileButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        var window =
+            new LlmProfileWindow
+            {
+                Owner =
+                    this
+            };
+
+        bool? result =
+            window.ShowDialog();
+
+        if (result != true)
+        {
+            return;
+        }
+
+        try
+        {
+            _profileCatalog =
+                await _profileManager
+                    .AddEncryptedAsync(
+                        name:
+                            window.ProfileName,
+
+                        endpoint:
+                            window.Endpoint,
+
+                        model:
+                            window.Model,
+
+                        apiKey:
+                            window.ApiKey,
+
+                        makeActive:
+                            window.MakeActive,
+
+                        apiFormat:
+                            window.ApiFormat);
+
+            LlmProfile? addedProfile =
+                _profileCatalog.Profiles
+                    .LastOrDefault();
+
+            RefreshProfiles(
+                addedProfile?.Id);
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                this,
+                exception.Message,
+                "Не удалось добавить модель",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private async void SetActiveProfileButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (ProfilesListBox.SelectedItem
+            is not LlmProfile profile)
+        {
+            MessageBox.Show(
+                this,
+                "Выберите модель.",
+                "Модель не выбрана",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            return;
+        }
+
+        try
+        {
+            _profileCatalog =
+                await _profileManager
+                    .SetActiveAsync(
+                        profile.Id);
+
+            RefreshProfiles(
+                profile.Id);
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                this,
+                exception.Message,
+                "Не удалось выбрать модель",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private void RefreshProfiles(
+        string? selectedProfileId)
+    {
+        ProfilesListBox.ItemsSource =
+            null;
+
+        ProfilesListBox.ItemsSource =
+            _profileCatalog.Profiles;
+
+        LlmProfile? activeProfile =
+            _profileCatalog.Profiles
+                .FirstOrDefault(
+                    profile =>
+                        string.Equals(
+                            profile.Id,
+                            _profileCatalog.ActiveProfileId,
+                            StringComparison.Ordinal));
+
+        ActiveProfileTextBlock.Text =
+            activeProfile is null
+                ? "Активная модель не выбрана."
+                : "Активная: "
+                  + activeProfile.Name
+                  + " · "
+                  + activeProfile.Model;
+
+        LlmProfile? selectedProfile =
+            _profileCatalog.Profiles
+                .FirstOrDefault(
+                    profile =>
+                        string.Equals(
+                            profile.Id,
+                            selectedProfileId,
+                            StringComparison.Ordinal));
+
+        ProfilesListBox.SelectedItem =
+            selectedProfile
+            ?? activeProfile;
     }
 
     private void SaveButton_Click(
@@ -74,15 +231,14 @@ public partial class SettingsWindow
             SelectedOptions =
                 new HarnessOptions(
                     llmEndpoint:
-                        EndpointTextBox.Text.Trim(),
+                        _originalOptions.LlmEndpoint,
 
                     model:
-                        ModelTextBox.Text.Trim(),
+                        _originalOptions.Model,
 
                     apiKeyEnvironmentVariable:
-                        ApiKeyEnvironmentTextBox
-                            .Text
-                            .Trim(),
+                        _originalOptions
+                            .ApiKeyEnvironmentVariable,
 
                     workspacePath:
                         WorkspaceTextBox.Text.Trim(),

@@ -12,6 +12,7 @@ using MyAgent.Messages;
 using MyAgent.Tools;
 using MyAgent.Workspace;
 using System.Windows.Input;
+using MyAgent.Secrets;
 
 using AgentCore = MyAgent.Agent.Agent;
 
@@ -26,8 +27,22 @@ public partial class MainWindow : Window
     private readonly HttpClient _httpClient;
     private readonly string _systemPrompt;
 
-    private AgentCore _agent;
+    private AgentCore? _agent;
     private HarnessOptions _options;
+
+    private readonly LlmProfileBootstrapper
+        _llmProfileBootstrapper;
+
+    private readonly LlmProfileManager
+        _llmProfileManager;
+
+    private readonly ILlmClientFactory
+        _llmClientFactory;
+
+    private LlmProfileCatalog _llmCatalog =
+        new();
+
+    private LlmProfile? _activeProfile;
 
     private bool _cancellationShownInline;
 
@@ -63,36 +78,112 @@ public partial class MainWindow : Window
                 systemPromptPath);
 
         _httpClient =
-            new HttpClient();
+    new HttpClient();
 
-        _agent =
-            CreateAgent(
-                _options);
+    var profileStore =
+        new LlmProfileStore();
 
-        UpdateStatus();
-        InputTextBox.Focus();
+    ISecretStore secretStore =
+        new DpapiSecretStore();
+
+    var secretResolver =
+        new LlmSecretResolver(
+            secretStore);
+
+    _llmProfileBootstrapper =
+        new LlmProfileBootstrapper(
+            profileStore,
+            secretStore);
+
+    _llmProfileManager =
+        new LlmProfileManager(
+            profileStore,
+            secretStore);
+
+    _llmClientFactory =
+        new LlmClientFactory(
+            _httpClient,
+            secretResolver);
+
+    SetReadyState(
+        ready: false);
+
+    StatusTextBlock.Text =
+        "Инициализация...";
+
+    Loaded +=
+        MainWindow_Loaded;
     }
 
-    private AgentCore CreateAgent(
-        HarnessOptions options)
+    private async void MainWindow_Loaded(
+        object sender,
+        RoutedEventArgs e)
     {
-        string? apiKey =
-            Environment.GetEnvironmentVariable(
-                options.ApiKeyEnvironmentVariable);
+        Loaded -=
+            MainWindow_Loaded;
 
-        if (string.IsNullOrWhiteSpace(apiKey))
+        try
         {
-            throw new InvalidOperationException(
-                "Не найдена переменная окружения "
-                + $"{options.ApiKeyEnvironmentVariable}.");
-        }
+            _llmCatalog =
+                await _llmProfileBootstrapper
+                    .EnsureInitializedAsync(
+                        _options);
 
+            _activeProfile =
+                GetActiveProfile(
+                    _llmCatalog);
+
+            _agent =
+                await CreateAgentAsync(
+                    _options,
+                    _activeProfile);
+
+            UpdateStatus();
+
+            SetReadyState(
+                ready: true);
+
+            InputTextBox.Focus();
+        }
+        catch (Exception exception)
+        {
+            StatusTextBlock.Text =
+                "Модель не настроена";
+
+            InputTextBox.IsEnabled =
+                false;
+
+            SendButton.IsEnabled =
+                false;
+
+            NewChatButton.IsEnabled =
+                false;
+
+            SettingsButton.IsEnabled =
+                true;
+
+            MessageBox.Show(
+                this,
+                exception.Message
+                + Environment.NewLine
+                + Environment.NewLine
+                + "Откройте настройки и добавьте "
+                + "или выберите рабочую модель.",
+                "Не удалось инициализировать AI Harness",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private async Task<AgentCore> CreateAgentAsync(
+        HarnessOptions options,
+        LlmProfile profile,
+        CancellationToken cancellationToken = default)
+    {
         ILlmClient llmClient =
-            new OpenAiCompatibleLlmClient(
-                _httpClient,
-                apiKey,
-                options.LlmEndpoint,
-                options.Model);
+            await _llmClientFactory.CreateAsync(
+                profile,
+                cancellationToken);
 
         var workspace =
             new AgentWorkspace(
@@ -148,10 +239,61 @@ public partial class MainWindow : Window
             _systemPrompt);
     }
 
+    private static LlmProfile GetActiveProfile(
+        LlmProfileCatalog catalog)
+    {
+        if (string.IsNullOrWhiteSpace(
+                catalog.ActiveProfileId))
+        {
+            throw new InvalidOperationException(
+                "Активная LLM-модель не выбрана.");
+        }
+
+        LlmProfile? profile =
+            catalog.Profiles
+                .FirstOrDefault(
+                    candidate =>
+                        string.Equals(
+                            candidate.Id,
+                            catalog.ActiveProfileId,
+                            StringComparison.Ordinal));
+
+        return profile
+            ?? throw new InvalidOperationException(
+                "Активный LLM-профиль не найден: "
+                + catalog.ActiveProfileId);
+    }
+
+    private void SetReadyState(
+        bool ready)
+    {
+        InputTextBox.IsEnabled =
+            ready;
+
+        SendButton.IsEnabled =
+            ready;
+
+        SettingsButton.IsEnabled =
+            ready;
+
+        NewChatButton.IsEnabled =
+            ready;
+    }
+
     private void UpdateStatus()
     {
+        if (_activeProfile is null)
+        {
+            StatusTextBlock.Text =
+                "Модель не выбрана";
+
+            return;
+        }
+
         StatusTextBlock.Text =
-            _options.Model
+            _activeProfile.Name
+            + " · "
+            + _activeProfile.Model
             + " · "
             + _options.WorkspacePath;
     }
@@ -249,7 +391,7 @@ public partial class MainWindow : Window
             .GetRawText();
     }
 
-    private void SettingsButton_Click(
+    private async void SettingsButton_Click(
         object sender,
         RoutedEventArgs e)
     {
@@ -258,9 +400,14 @@ public partial class MainWindow : Window
             return;
         }
 
+        string? previousActiveProfileId =
+            _llmCatalog.ActiveProfileId;
+
         var settingsWindow =
             new SettingsWindow(
-                _options)
+                _options,
+                _llmProfileManager,
+                _llmCatalog)
             {
                 Owner =
                     this
@@ -269,28 +416,61 @@ public partial class MainWindow : Window
         bool? result =
             settingsWindow.ShowDialog();
 
-        if (result != true
-            ||
+        LlmProfileCatalog newCatalog =
+            settingsWindow.ProfileCatalog;
+
+        bool activeProfileChanged =
+            !string.Equals(
+                previousActiveProfileId,
+                newCatalog.ActiveProfileId,
+                StringComparison.Ordinal);
+
+        bool generalSettingsChanged =
+            result == true
+            &&
             settingsWindow.SelectedOptions
-                is null)
+                is not null;
+
+        _llmCatalog =
+            newCatalog;
+
+        if (!activeProfileChanged
+            &&
+            !generalSettingsChanged)
         {
             return;
         }
 
         HarnessOptions newOptions =
-            settingsWindow.SelectedOptions;
+            generalSettingsChanged
+                ? settingsWindow.SelectedOptions!
+                : _options;
 
         try
         {
-            AgentCore newAgent =
-                CreateAgent(
-                    newOptions);
+            LlmProfile newActiveProfile =
+                GetActiveProfile(
+                    newCatalog);
 
-            HarnessOptions.Save(
-                newOptions);
+            AgentCore newAgent =
+                await CreateAgentAsync(
+                    newOptions,
+                    newActiveProfile);
+
+            if (generalSettingsChanged)
+            {
+                HarnessOptions.Save(
+                    newOptions);
+            }
 
             _options =
                 newOptions;
+
+            _llmCatalog =
+                newCatalog;
+
+            _activeProfile =
+                newActiveProfile;
 
             _agent =
                 newAgent;
@@ -305,6 +485,24 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
+            if (activeProfileChanged
+                &&
+                !string.IsNullOrWhiteSpace(
+                    previousActiveProfileId))
+            {
+                try
+                {
+                    _llmCatalog =
+                        await _llmProfileManager
+                            .SetActiveAsync(
+                                previousActiveProfileId);
+                }
+                catch
+                {
+                    // Preserve the original failure.
+                }
+            }
+
             MessageBox.Show(
                 this,
                 exception.Message,
@@ -345,6 +543,14 @@ public partial class MainWindow : Window
     private async Task SendCurrentInputAsync()
     {
         if (_runCancellation is not null)
+        {
+            return;
+        }
+
+        AgentCore? agent =
+            _agent;
+
+        if (agent is null)
         {
             return;
         }
@@ -390,7 +596,7 @@ public partial class MainWindow : Window
         try
         {
             LlmResponse response =
-                await _agent.RunAsync(
+                await agent.RunAsync(
                     input,
                     cancellationToken);
 
@@ -506,7 +712,7 @@ public partial class MainWindow : Window
         base.OnClosed(e);
     }
 
-    private void NewChatButton_Click(
+    private async void NewChatButton_Click(
         object sender,
         RoutedEventArgs e)
     {
@@ -517,9 +723,17 @@ public partial class MainWindow : Window
 
         try
         {
+            LlmProfile activeProfile =
+                GetActiveProfile(
+                    _llmCatalog);
+
             AgentCore newAgent =
-                CreateAgent(
-                    _options);
+                await CreateAgentAsync(
+                    _options,
+                    activeProfile);
+
+            _activeProfile =
+                activeProfile;
 
             _agent =
                 newAgent;
@@ -530,6 +744,8 @@ public partial class MainWindow : Window
 
             AddActivity(
                 "✓ Новый чат начат.");
+
+            UpdateStatus();
 
             InputTextBox.Focus();
         }
