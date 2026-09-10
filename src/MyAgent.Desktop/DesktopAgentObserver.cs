@@ -73,6 +73,12 @@ public class DesktopAgentObserver
 
                 "run_terminal" =>
                     "✓ Команда выполнена",
+                
+                "search_files" =>
+                    "✓ Поиск завершён",
+
+                "edit_file" =>
+                    "✓ Файл изменён",
 
                 _ =>
                     $"✓ {toolCall.Name} завершён"
@@ -104,6 +110,18 @@ public class DesktopAgentObserver
 
             "run_terminal" =>
                 "Запрашивает выполнение команды",
+
+            "search_files" =>
+                "Ищет по файлам: "
+                + ReadArgument(
+                    toolCall,
+                    "query"),
+
+            "edit_file" =>
+                "Редактирует файл "
+                + ReadArgument(
+                    toolCall,
+                    "path"),
 
             _ =>
                 $"Вызывает {toolCall.Name}"

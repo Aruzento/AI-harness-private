@@ -106,7 +106,15 @@ public partial class MainWindow : Window
                 workspace));
 
         toolRegistry.Register(
+            new SearchFilesTool(
+                workspace));
+
+        toolRegistry.Register(
             new ReadFileTool(
+                workspace));
+
+        toolRegistry.Register(
+            new EditFileTool(
                 workspace));
 
         toolRegistry.Register(
