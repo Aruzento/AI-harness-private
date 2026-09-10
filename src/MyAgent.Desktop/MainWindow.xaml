@@ -183,12 +183,24 @@
                 FontSize="11"
                 Foreground="#777777" />
 
-            <Button
-                x:Name="SettingsButton"
+            <StackPanel
                 Grid.Column="1"
-                Padding="10,5"
-                Content="Настройки"
-                Click="SettingsButton_Click" />
+                Orientation="Horizontal">
+
+                <Button
+                    x:Name="NewChatButton"
+                    Padding="10,5"
+                    Margin="0,0,8,0"
+                    Content="Новый чат"
+                    Click="NewChatButton_Click" />
+
+                <Button
+                    x:Name="SettingsButton"
+                    Padding="10,5"
+                    Content="Настройки"
+                    Click="SettingsButton_Click" />
+
+</StackPanel>
 
         </Grid>
 
@@ -221,7 +233,8 @@
                 Padding="8"
                 AcceptsReturn="True"
                 TextWrapping="Wrap"
-                VerticalScrollBarVisibility="Auto" />
+                VerticalScrollBarVisibility="Auto"
+                PreviewKeyDown="InputTextBox_PreviewKeyDown" />
 
             <Grid
                 Grid.Column="1"

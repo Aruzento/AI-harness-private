@@ -11,6 +11,7 @@ using MyAgent.Llm;
 using MyAgent.Messages;
 using MyAgent.Tools;
 using MyAgent.Workspace;
+using System.Windows.Input;
 
 using AgentCore = MyAgent.Agent.Agent;
 
@@ -69,6 +70,7 @@ public partial class MainWindow : Window
                 _options);
 
         UpdateStatus();
+        InputTextBox.Focus();
     }
 
     private AgentCore CreateAgent(
@@ -308,6 +310,32 @@ public partial class MainWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        await SendCurrentInputAsync();
+    }
+
+    private async void InputTextBox_PreviewKeyDown(
+        object sender,
+        KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+        {
+            return;
+        }
+
+        if (Keyboard.Modifiers.HasFlag(
+                ModifierKeys.Shift))
+        {
+            return;
+        }
+
+        e.Handled =
+            true;
+
+        await SendCurrentInputAsync();
+    }
+
+    private async Task SendCurrentInputAsync()
+    {
         if (_runCancellation is not null)
         {
             return;
@@ -346,6 +374,9 @@ public partial class MainWindow : Window
             true;
 
         SettingsButton.IsEnabled =
+            false;
+
+        NewChatButton.IsEnabled =
             false;
 
         try
@@ -393,6 +424,9 @@ public partial class MainWindow : Window
                 true;
 
             SettingsButton.IsEnabled =
+                true;
+
+            NewChatButton.IsEnabled =
                 true;
 
             InputTextBox.Focus();
@@ -462,5 +496,43 @@ public partial class MainWindow : Window
         _httpClient.Dispose();
 
         base.OnClosed(e);
+    }
+
+    private void NewChatButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_runCancellation is not null)
+        {
+            return;
+        }
+
+        try
+        {
+            AgentCore newAgent =
+                CreateAgent(
+                    _options);
+
+            _agent =
+                newAgent;
+
+            _items.Clear();
+
+            InputTextBox.Clear();
+
+            AddActivity(
+                "✓ Новый чат начат.");
+
+            InputTextBox.Focus();
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                this,
+                exception.Message,
+                "Не удалось начать новый чат",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 }
