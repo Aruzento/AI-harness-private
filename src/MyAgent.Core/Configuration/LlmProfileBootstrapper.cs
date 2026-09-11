@@ -23,7 +23,7 @@ public sealed class LlmProfileBootstrapper
     }
 
     public async Task<LlmProfileCatalog> EnsureInitializedAsync(
-        HarnessOptions legacyOptions,
+        LegacyLlmSettings legacyOptions,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(
@@ -135,7 +135,7 @@ public sealed class LlmProfileBootstrapper
     }
 
     private static string CreateLegacyProfileName(
-        HarnessOptions options)
+        LegacyLlmSettings options)
     {
         if (options.LlmEndpoint.Contains(
                 "groq.com",

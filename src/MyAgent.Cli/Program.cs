@@ -5,22 +5,10 @@ using MyAgent.Guardrails;
 using MyAgent.Llm;
 using MyAgent.Tools;
 using MyAgent.Workspace;
+using MyAgent.Secrets;
 
 HarnessOptions options =
     HarnessOptions.Load();
-
-string? apiKey =
-    Environment.GetEnvironmentVariable(
-        options.ApiKeyEnvironmentVariable);
-
-if (string.IsNullOrWhiteSpace(apiKey))
-{
-    Console.WriteLine(
-        "Не найдена переменная окружения "
-        + $"{options.ApiKeyEnvironmentVariable}.");
-
-    return;
-}
 
 string systemPromptPath =
     Path.Combine(
@@ -42,12 +30,66 @@ string systemPrompt =
 using var httpClient =
     new HttpClient();
 
-ILlmClient llmClient =
-    new OpenAiCompatibleLlmClient(
+if (!OperatingSystem.IsWindows())
+{
+    Console.WriteLine(
+        "Текущее хранилище API keys использует Windows DPAPI.");
+
+    return;
+}
+
+var profileStore =
+    new LlmProfileStore();
+
+ISecretStore secretStore =
+    new DpapiSecretStore();
+
+var secretResolver =
+    new LlmSecretResolver(
+        secretStore);
+
+var profileBootstrapper =
+    new LlmProfileBootstrapper(
+        profileStore,
+        secretStore);
+
+ILlmClientFactory llmClientFactory =
+    new LlmClientFactory(
         httpClient,
-        apiKey,
-        options.LlmEndpoint,
-        options.Model);
+        secretResolver);
+
+LegacyLlmSettings legacyLlmSettings =
+    LegacyLlmSettings.Load();
+
+LlmProfileCatalog profileCatalog =
+    await profileBootstrapper
+        .EnsureInitializedAsync(
+            legacyLlmSettings);
+
+LlmProfile? activeProfile =
+    profileCatalog.Profiles
+        .FirstOrDefault(
+            profile =>
+                string.Equals(
+                    profile.Id,
+                    profileCatalog.ActiveProfileId,
+                    StringComparison.Ordinal));
+
+if (activeProfile is null)
+{
+    Console.WriteLine(
+        "Активная LLM-модель не настроена.");
+
+    Console.WriteLine(
+        "Откройте Desktop-приложение "
+        + "и добавьте или выберите модель.");
+
+    return;
+}
+
+ILlmClient llmClient =
+    await llmClientFactory.CreateAsync(
+        activeProfile);
 
 var workspace =
     new AgentWorkspace(
@@ -141,10 +183,13 @@ while (true)
         Console.WriteLine();
 
         Console.WriteLine(
-            $"Model: {options.Model}");
-        
+            $"Profile: {activeProfile.Name}");
+
         Console.WriteLine(
-            $"LLM endpoint: {options.LlmEndpoint}");
+            $"Model: {activeProfile.Model}");
+
+        Console.WriteLine(
+            $"LLM endpoint: {activeProfile.Endpoint}");
 
         Console.WriteLine(
             $"Workspace: {workspace.RootPath}");
@@ -163,7 +208,7 @@ while (true)
             $"Version: {HarnessVersion.Current}");
 
         Console.WriteLine(
-            $"API key env: {options.ApiKeyEnvironmentVariable}");
+            $"Secret source: {activeProfile.SecretSource}");
 
         Console.WriteLine(
             $"Settings: {HarnessOptions.SettingsFilePath}");

@@ -306,16 +306,6 @@ public partial class SettingsWindow
         {
             SelectedOptions =
                 new HarnessOptions(
-                    llmEndpoint:
-                        _originalOptions.LlmEndpoint,
-
-                    model:
-                        _originalOptions.Model,
-
-                    apiKeyEnvironmentVariable:
-                        _originalOptions
-                            .ApiKeyEnvironmentVariable,
-
                     workspacePath:
                         WorkspaceTextBox.Text.Trim(),
 

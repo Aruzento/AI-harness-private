@@ -124,10 +124,13 @@ public partial class MainWindow : Window
 
         try
         {
+            LegacyLlmSettings legacyLlmSettings =
+                LegacyLlmSettings.Load();
+
             _llmCatalog =
                 await _llmProfileBootstrapper
                     .EnsureInitializedAsync(
-                        _options);
+                        legacyLlmSettings);
 
             _activeProfile =
                 GetActiveProfile(

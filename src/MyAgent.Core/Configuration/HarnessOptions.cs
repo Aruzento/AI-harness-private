@@ -4,15 +4,6 @@ namespace MyAgent.Configuration;
 
 public class HarnessOptions
 {
-    private const string DefaultEndpoint =
-        "https://api.groq.com/openai/v1/chat/completions";
-
-    private const string DefaultModel =
-        "openai/gpt-oss-20b";
-
-    private const string DefaultApiKeyEnvironmentVariable =
-        "GROQ_API_KEY";
-
     private const string DefaultWorkspacePath =
         "Workdir";
 
@@ -24,12 +15,6 @@ public class HarnessOptions
 
     private const int DefaultTerminalTimeoutSeconds =
         15;
-
-    public string LlmEndpoint { get; }
-
-    public string Model { get; }
-
-    public string ApiKeyEnvironmentVariable { get; }
 
     public string WorkspacePath { get; }
 
@@ -47,37 +32,13 @@ public class HarnessOptions
             "settings.json");
 
     public HarnessOptions(
-        string llmEndpoint,
-        string model,
-        string apiKeyEnvironmentVariable,
         string workspacePath,
         int maxSteps,
         int maxToolCalls,
         int terminalTimeoutSeconds)
     {
-        if (string.IsNullOrWhiteSpace(llmEndpoint))
-        {
-            throw new ArgumentException(
-                "LLM endpoint cannot be empty.",
-                nameof(llmEndpoint));
-        }
-
-        if (string.IsNullOrWhiteSpace(model))
-        {
-            throw new ArgumentException(
-                "Model cannot be empty.",
-                nameof(model));
-        }
-
         if (string.IsNullOrWhiteSpace(
-                apiKeyEnvironmentVariable))
-        {
-            throw new ArgumentException(
-                "API key environment variable cannot be empty.",
-                nameof(apiKeyEnvironmentVariable));
-        }
-
-        if (string.IsNullOrWhiteSpace(workspacePath))
+                workspacePath))
         {
             throw new ArgumentException(
                 "Workspace path cannot be empty.",
@@ -102,15 +63,6 @@ public class HarnessOptions
                 nameof(terminalTimeoutSeconds));
         }
 
-        LlmEndpoint =
-            llmEndpoint;
-
-        Model =
-            model;
-
-        ApiKeyEnvironmentVariable =
-            apiKeyEnvironmentVariable;
-
         WorkspacePath =
             workspacePath;
 
@@ -130,21 +82,6 @@ public class HarnessOptions
             LoadSaved();
 
         return new HarnessOptions(
-            llmEndpoint:
-                ReadString(
-                    "AI_HARNESS_LLM_ENDPOINT",
-                    saved.LlmEndpoint),
-
-            model:
-                ReadString(
-                    "AI_HARNESS_MODEL",
-                    saved.Model),
-
-            apiKeyEnvironmentVariable:
-                ReadString(
-                    "AI_HARNESS_API_KEY_ENV",
-                    saved.ApiKeyEnvironmentVariable),
-
             workspacePath:
                 ReadString(
                     "AI_HARNESS_WORKDIR",
@@ -183,15 +120,6 @@ public class HarnessOptions
         var saved =
             new SavedHarnessOptions
             {
-                LlmEndpoint =
-                    options.LlmEndpoint,
-
-                Model =
-                    options.Model,
-
-                ApiKeyEnvironmentVariable =
-                    options.ApiKeyEnvironmentVariable,
-
                 WorkspacePath =
                     options.WorkspacePath,
 
@@ -244,21 +172,6 @@ public class HarnessOptions
             }
 
             return new HarnessOptions(
-                llmEndpoint:
-                    ReadSavedString(
-                        saved.LlmEndpoint,
-                        DefaultEndpoint),
-
-                model:
-                    ReadSavedString(
-                        saved.Model,
-                        DefaultModel),
-
-                apiKeyEnvironmentVariable:
-                    ReadSavedString(
-                        saved.ApiKeyEnvironmentVariable,
-                        DefaultApiKeyEnvironmentVariable),
-
                 workspacePath:
                     ReadSavedString(
                         saved.WorkspacePath,
@@ -290,9 +203,6 @@ public class HarnessOptions
     private static HarnessOptions CreateDefaults()
     {
         return new HarnessOptions(
-            DefaultEndpoint,
-            DefaultModel,
-            DefaultApiKeyEnvironmentVariable,
             DefaultWorkspacePath,
             DefaultMaxSteps,
             DefaultMaxToolCalls,
@@ -307,7 +217,8 @@ public class HarnessOptions
             Environment.GetEnvironmentVariable(
                 name);
 
-        return string.IsNullOrWhiteSpace(value)
+        return string.IsNullOrWhiteSpace(
+            value)
             ? defaultValue
             : value;
     }
@@ -320,7 +231,8 @@ public class HarnessOptions
             Environment.GetEnvironmentVariable(
                 name);
 
-        if (string.IsNullOrWhiteSpace(value))
+        if (string.IsNullOrWhiteSpace(
+                value))
         {
             return defaultValue;
         }
@@ -343,7 +255,8 @@ public class HarnessOptions
         string? value,
         string defaultValue)
     {
-        return string.IsNullOrWhiteSpace(value)
+        return string.IsNullOrWhiteSpace(
+            value)
             ? defaultValue
             : value;
     }
@@ -359,21 +272,23 @@ public class HarnessOptions
 
     private sealed class SavedHarnessOptions
     {
-        public string? LlmEndpoint { get; set; }
-
-        public string? Model { get; set; }
-
-        public string? ApiKeyEnvironmentVariable
+        public string? WorkspacePath
         {
             get;
             set;
         }
 
-        public string? WorkspacePath { get; set; }
+        public int? MaxSteps
+        {
+            get;
+            set;
+        }
 
-        public int? MaxSteps { get; set; }
-
-        public int? MaxToolCalls { get; set; }
+        public int? MaxToolCalls
+        {
+            get;
+            set;
+        }
 
         public int? TerminalTimeoutSeconds
         {
