@@ -158,6 +158,82 @@ public partial class SettingsWindow
         }
     }
 
+    private async void DeleteProfileButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (ProfilesListBox.SelectedItem
+            is not LlmProfile profile)
+        {
+            MessageBox.Show(
+                this,
+                "Выберите модель.",
+                "Модель не выбрана",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            return;
+        }
+
+        if (string.Equals(
+                profile.Id,
+                _profileCatalog.ActiveProfileId,
+                StringComparison.Ordinal))
+        {
+            MessageBox.Show(
+                this,
+                "Активную модель удалить нельзя. "
+                + "Сначала выберите другую модель "
+                + "и сделайте её активной.",
+                "Нельзя удалить модель",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            return;
+        }
+
+        MessageBoxResult confirmation =
+            MessageBox.Show(
+                this,
+                "Удалить модель «"
+                + profile.Name
+                + "»?"
+                + Environment.NewLine
+                + Environment.NewLine
+                + "Связанный зашифрованный API key "
+                + "также будет удалён, если он больше "
+                + "не используется другими профилями.",
+                "Удаление модели",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No);
+
+        if (confirmation !=
+            MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            _profileCatalog =
+                await _profileManager.DeleteAsync(
+                    profile.Id);
+
+            RefreshProfiles(
+                _profileCatalog.ActiveProfileId);
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                this,
+                exception.Message,
+                "Не удалось удалить модель",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
     private void RefreshProfiles(
         string? selectedProfileId)
     {
@@ -296,5 +372,80 @@ public partial class SettingsWindow
             MessageBoxImage.Warning);
 
         return false;
+    }
+
+    private async void EditProfileButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (ProfilesListBox.SelectedItem
+            is not LlmProfile profile)
+        {
+            MessageBox.Show(
+                this,
+                "Выберите модель.",
+                "Модель не выбрана",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            return;
+        }
+
+        var window =
+            new LlmProfileWindow(
+                profile)
+            {
+                Owner =
+                    this
+            };
+
+        bool? result =
+            window.ShowDialog();
+
+        if (result != true)
+        {
+            return;
+        }
+
+        string? newApiKey =
+            string.IsNullOrEmpty(
+                window.ApiKey)
+                ? null
+                : window.ApiKey;
+
+        try
+        {
+            _profileCatalog =
+                await _profileManager.UpdateAsync(
+                    profileId:
+                        profile.Id,
+
+                    name:
+                        window.ProfileName,
+
+                    endpoint:
+                        window.Endpoint,
+
+                    model:
+                        window.Model,
+
+                    newApiKey:
+                        newApiKey,
+
+                    apiFormat:
+                        window.ApiFormat);
+
+            RefreshProfiles(
+                profile.Id);
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                this,
+                exception.Message,
+                "Не удалось изменить модель",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 }

@@ -7,6 +7,8 @@ namespace MyAgent.Desktop;
 public partial class LlmProfileWindow
     : Window
 {
+    private readonly LlmProfile? _editingProfile;
+
     public string ProfileName
     {
         get;
@@ -56,6 +58,69 @@ public partial class LlmProfileWindow
             0;
 
         NameTextBox.Focus();
+    }
+
+    public LlmProfileWindow(
+        LlmProfile profile)
+    {
+        _editingProfile =
+            profile
+            ?? throw new ArgumentNullException(
+                nameof(profile));
+
+        InitializeComponent();
+
+        Title =
+            "Редактировать модель";
+
+        NameTextBox.Text =
+            profile.Name;
+
+        EndpointTextBox.Text =
+            profile.Endpoint;
+
+        ModelTextBox.Text =
+            profile.Model;
+
+        SelectApiFormat(
+            profile.ApiFormat);
+
+        ApiKeyHintTextBlock.Text =
+            "Оставьте API key пустым, "
+            + "чтобы сохранить текущий ключ. "
+            + "Если ввести новый ключ, "
+            + "он заменит текущий и будет защищён Windows DPAPI.";
+
+        MakeActiveCheckBox.Visibility =
+            Visibility.Collapsed;
+
+        NameTextBox.Focus();
+    }
+
+    private void SelectApiFormat(
+        string apiFormat)
+    {
+        foreach (object item
+                in ApiFormatComboBox.Items)
+        {
+            if (item is ComboBoxItem comboBoxItem
+                &&
+                comboBoxItem.Tag is string tag
+                &&
+                string.Equals(
+                    tag,
+                    apiFormat,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                ApiFormatComboBox.SelectedItem =
+                    comboBoxItem;
+
+                return;
+            }
+        }
+
+        ApiFormatComboBox.SelectedIndex =
+            0;
     }
 
     private void SaveButton_Click(
@@ -126,7 +191,9 @@ public partial class LlmProfileWindow
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(
+        if (_editingProfile is null
+            &&
+            string.IsNullOrWhiteSpace(
                 apiKey))
         {
             ShowValidationError(

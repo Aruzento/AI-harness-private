@@ -2,9 +2,9 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Настройки AI Harness"
-        Width="650"
+        Width="760"
         Height="700"
-        MinWidth="550"
+        MinWidth="650"
         MinHeight="600"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResize">
@@ -74,6 +74,20 @@
                         Height="34"
                         Content="Сделать активной"
                         Click="SetActiveProfileButton_Click" />
+
+                    <Button
+                        Width="100"
+                        Height="34"
+                        Margin="8,0,0,0"
+                        Content="Изменить"
+                        Click="EditProfileButton_Click" />
+
+                    <Button
+                        Width="100"
+                        Height="34"
+                        Margin="8,0,0,0"
+                        Content="Удалить"
+                        Click="DeleteProfileButton_Click" />
 
                 </StackPanel>
 

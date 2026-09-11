@@ -73,6 +73,7 @@
                     Padding="7" />
 
                 <TextBlock
+                    x:Name="ApiKeyHintTextBlock"
                     Text="Ключ будет сохранён отдельно и защищён Windows DPAPI."
                     FontSize="11"
                     Foreground="#777777"

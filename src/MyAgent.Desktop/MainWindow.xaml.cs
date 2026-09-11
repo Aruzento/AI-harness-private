@@ -403,6 +403,15 @@ public partial class MainWindow : Window
         string? previousActiveProfileId =
             _llmCatalog.ActiveProfileId;
 
+        LlmProfile? previousActiveProfile =
+            _llmCatalog.Profiles
+                .FirstOrDefault(
+                    profile =>
+                        string.Equals(
+                            profile.Id,
+                            previousActiveProfileId,
+                            StringComparison.Ordinal));
+
         var settingsWindow =
             new SettingsWindow(
                 _options,
@@ -419,11 +428,25 @@ public partial class MainWindow : Window
         LlmProfileCatalog newCatalog =
             settingsWindow.ProfileCatalog;
 
+        LlmProfile? newCatalogActiveProfile  =
+            newCatalog.Profiles
+                .FirstOrDefault(
+                    profile =>
+                        string.Equals(
+                            profile.Id,
+                            newCatalog.ActiveProfileId,
+                            StringComparison.Ordinal));
+
         bool activeProfileChanged =
             !string.Equals(
                 previousActiveProfileId,
                 newCatalog.ActiveProfileId,
                 StringComparison.Ordinal);
+
+        bool activeProfileConfigurationChanged =
+            !AreProfilesEquivalent(
+                previousActiveProfile,
+                newCatalogActiveProfile);
 
         bool generalSettingsChanged =
             result == true
@@ -435,6 +458,8 @@ public partial class MainWindow : Window
             newCatalog;
 
         if (!activeProfileChanged
+            &&
+            !activeProfileConfigurationChanged
             &&
             !generalSettingsChanged)
         {
@@ -758,5 +783,59 @@ public partial class MainWindow : Window
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
+    }
+
+    private static bool AreProfilesEquivalent(
+        LlmProfile? left,
+        LlmProfile? right)
+    {
+        if (ReferenceEquals(
+                left,
+                right))
+        {
+            return true;
+        }
+
+        if (left is null
+            ||
+            right is null)
+        {
+            return false;
+        }
+
+        return string.Equals(
+                left.Id,
+                right.Id,
+                StringComparison.Ordinal)
+            &&
+            string.Equals(
+                left.Name,
+                right.Name,
+                StringComparison.Ordinal)
+            &&
+            string.Equals(
+                left.ApiFormat,
+                right.ApiFormat,
+                StringComparison.Ordinal)
+            &&
+            string.Equals(
+                left.Endpoint,
+                right.Endpoint,
+                StringComparison.Ordinal)
+            &&
+            string.Equals(
+                left.Model,
+                right.Model,
+                StringComparison.Ordinal)
+            &&
+            string.Equals(
+                left.SecretSource,
+                right.SecretSource,
+                StringComparison.Ordinal)
+            &&
+            string.Equals(
+                left.SecretReference,
+                right.SecretReference,
+                StringComparison.Ordinal);
     }
 }
