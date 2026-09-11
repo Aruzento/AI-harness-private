@@ -97,10 +97,8 @@ public class DesktopAgentObserver
                 "Просматривает файлы",
 
             "read_file" =>
-                "Читает файл "
-                + ReadArgument(
-                    toolCall,
-                    "path"),
+                DescribeReadFileCall(
+                    toolCall),
 
             "write_file" =>
                 "Записывает файл "
@@ -126,6 +124,80 @@ public class DesktopAgentObserver
             _ =>
                 $"Вызывает {toolCall.Name}"
         };
+    }
+
+    private static string DescribeReadFileCall(
+        ToolCall toolCall)
+    {
+        string description =
+            "Читает файл "
+            + ReadArgument(
+                toolCall,
+                "path");
+
+        int? startLine =
+            ReadIntArgument(
+                toolCall,
+                "start_line");
+
+        int? endLine =
+            ReadIntArgument(
+                toolCall,
+                "end_line");
+
+        if (!startLine.HasValue
+            &&
+            !endLine.HasValue)
+        {
+            return description;
+        }
+
+        if (startLine.HasValue
+            &&
+            endLine.HasValue)
+        {
+            return description
+                + " · строки "
+                + startLine.Value
+                + "–"
+                + endLine.Value;
+        }
+
+        if (startLine.HasValue)
+        {
+            return description
+                + " · с строки "
+                + startLine.Value;
+        }
+
+        if (endLine.HasValue)
+        {
+            return description
+                + " · строки 1–"
+                + endLine.Value;
+        }
+
+        return description;
+    }
+
+    private static int? ReadIntArgument(
+        ToolCall toolCall,
+        string name)
+    {
+        if (toolCall.Arguments.TryGetProperty(
+                name,
+                out var element)
+            &&
+            element.ValueKind ==
+                System.Text.Json.JsonValueKind.Number
+            &&
+            element.TryGetInt32(
+                out int value))
+        {
+            return value;
+        }
+
+        return null;
     }
 
     private static string ReadArgument(
