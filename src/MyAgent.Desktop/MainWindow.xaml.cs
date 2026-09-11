@@ -374,24 +374,121 @@ public partial class MainWindow : Window
     {
         if (toolCall.Name.Equals(
                 "run_terminal",
-                StringComparison.OrdinalIgnoreCase)
-            &&
-            toolCall.Arguments.ValueKind ==
-                JsonValueKind.Object
-            &&
-            toolCall.Arguments.TryGetProperty(
-                "command",
-                out JsonElement commandElement)
-            &&
-            commandElement.ValueKind ==
-                JsonValueKind.String)
+                StringComparison.OrdinalIgnoreCase))
         {
-            return commandElement.GetString()
-                ?? string.Empty;
+            return ReadApprovalStringArgument(
+                toolCall,
+                "command");
+        }
+
+        if (toolCall.Name.Equals(
+                "edit_file",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return DescribeEditFileApproval(
+                toolCall);
+        }
+
+        if (toolCall.Name.Equals(
+                "write_file",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return DescribeWriteFileApproval(
+                toolCall);
         }
 
         return toolCall.Arguments
             .GetRawText();
+    }
+
+    private static string DescribeEditFileApproval(
+        ToolCall toolCall)
+    {
+        string path =
+            ReadApprovalStringArgument(
+                toolCall,
+                "path");
+
+        string oldText =
+            ReadApprovalStringArgument(
+                toolCall,
+                "old_text");
+
+        string newText =
+            ReadApprovalStringArgument(
+                toolCall,
+                "new_text");
+
+        string newPreview =
+            newText.Length == 0
+                ? "(пусто — фрагмент будет удалён)"
+                : newText;
+
+        return
+            "Файл: "
+            + path
+            + Environment.NewLine
+            + Environment.NewLine
+            + "--- Текущий фрагмент"
+            + Environment.NewLine
+            + oldText
+            + Environment.NewLine
+            + Environment.NewLine
+            + "+++ Новый фрагмент"
+            + Environment.NewLine
+            + newPreview;
+    }
+
+    private static string DescribeWriteFileApproval(
+        ToolCall toolCall)
+    {
+        string path =
+            ReadApprovalStringArgument(
+                toolCall,
+                "path");
+
+        string content =
+            ReadApprovalStringArgument(
+                toolCall,
+                "content");
+
+        string contentPreview =
+            content.Length == 0
+                ? "(пустой файл)"
+                : content;
+
+        return
+            "Файл: "
+            + path
+            + Environment.NewLine
+            + Environment.NewLine
+            + "Файл будет создан или полностью перезаписан."
+            + Environment.NewLine
+            + Environment.NewLine
+            + "+++ Полное содержимое после записи"
+            + Environment.NewLine
+            + contentPreview;
+    }
+
+    private static string ReadApprovalStringArgument(
+        ToolCall toolCall,
+        string name)
+    {
+        if (toolCall.Arguments.ValueKind ==
+                JsonValueKind.Object
+            &&
+            toolCall.Arguments.TryGetProperty(
+                name,
+                out JsonElement element)
+            &&
+            element.ValueKind ==
+                JsonValueKind.String)
+        {
+            return element.GetString()
+                ?? string.Empty;
+        }
+
+        return "(не указано)";
     }
 
     private async void SettingsButton_Click(

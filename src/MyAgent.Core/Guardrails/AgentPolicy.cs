@@ -30,7 +30,15 @@ public class AgentPolicy
         string toolName)
     {
         return toolName.Equals(
-            "run_terminal",
-            StringComparison.OrdinalIgnoreCase);
+                "run_terminal",
+                StringComparison.OrdinalIgnoreCase)
+            ||
+            toolName.Equals(
+                "edit_file",
+                StringComparison.OrdinalIgnoreCase)
+            ||
+            toolName.Equals(
+                "write_file",
+                StringComparison.OrdinalIgnoreCase);
     }
 }
