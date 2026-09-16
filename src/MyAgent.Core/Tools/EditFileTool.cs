@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MyAgent.Guardrails;
 using MyAgent.Workspace;
+using MyAgent.Diff;
 
 namespace MyAgent.Tools;
 
@@ -187,24 +188,25 @@ public class EditFileTool
                         firstIndex,
                         newText);
 
-            string newPreview =
-                newText.Length == 0
-                    ? "(пусто — фрагмент будет удалён)"
-                    : newText;
+            IReadOnlyList<LineDiffLine> diff =
+                LineDiffEngine.Create(
+                    oldContent,
+                    newContent);
+
+            string diffText =
+                LineDiffTextFormatter.Format(
+                    diff,
+                    contextLines: 2);
 
             string previewText =
                 "Файл: "
                 + path
                 + Environment.NewLine
                 + Environment.NewLine
-                + "--- Текущий фрагмент"
-                + Environment.NewLine
-                + oldText
+                + "Изменения:"
                 + Environment.NewLine
                 + Environment.NewLine
-                + "+++ Новый фрагмент"
-                + Environment.NewLine
-                + newPreview;
+                + diffText;
 
             return new ToolApprovalPreview(
                 previewText,
