@@ -346,7 +346,9 @@ public partial class MainWindow : Window
         var item =
             new ApprovalItem(
                 request.ToolCall.Name,
-                request.Preview.Text);
+                request.Preview.Text,
+                request.Preview.FileChange
+                    is not null);
 
         AddChatItem(
             item);

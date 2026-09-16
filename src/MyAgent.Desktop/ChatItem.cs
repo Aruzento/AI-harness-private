@@ -61,6 +61,8 @@ public sealed class ApprovalItem
 
     public string ToolName { get; }
 
+    public bool IsDiff { get; }
+
     public bool IsPending =>
         _isPending;
 
@@ -72,11 +74,15 @@ public sealed class ApprovalItem
 
     public ApprovalItem(
         string toolName,
-        string text)
+        string text,
+        bool isDiff)
         : base(text)
     {
         ToolName =
             toolName;
+
+        IsDiff =
+            isDiff;
     }
 
     public Task<bool> WaitAsync(
