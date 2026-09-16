@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MyAgent.Diff;
 using MyAgent.Guardrails;
 using MyAgent.Workspace;
 
@@ -106,15 +107,52 @@ public class WriteFileTool
                         cancellationToken);
             }
 
-            string contentPreview =
-                newContent.Length == 0
-                    ? "(пустой файл)"
-                    : newContent;
+            bool isNewFile =
+                oldContent is null;
 
-            string operationText =
-                oldContent is null
-                    ? "Файл будет создан."
-                    : "Файл будет полностью перезаписан.";
+            string operationText;
+
+            if (isNewFile)
+            {
+                operationText =
+                    "Файл будет создан.";
+            }
+            else if (string.Equals(
+                        oldContent,
+                        newContent,
+                        StringComparison.Ordinal))
+            {
+                operationText =
+                    "Содержимое файла не изменится.";
+            }
+            else
+            {
+                operationText =
+                    "Файл будет полностью перезаписан.";
+            }
+
+            string diffText;
+
+            if (isNewFile
+                &&
+                newContent.Length == 0)
+            {
+                diffText =
+                    "(будет создан пустой файл)";
+            }
+            else
+            {
+                IReadOnlyList<LineDiffLine> diff =
+                    LineDiffEngine.Create(
+                        oldContent
+                        ?? string.Empty,
+                        newContent);
+
+                diffText =
+                    LineDiffTextFormatter.Format(
+                        diff,
+                        contextLines: 2);
+            }
 
             string previewText =
                 "Файл: "
@@ -124,9 +162,10 @@ public class WriteFileTool
                 + operationText
                 + Environment.NewLine
                 + Environment.NewLine
-                + "+++ Полное содержимое после записи"
+                + "Изменения:"
                 + Environment.NewLine
-                + contentPreview;
+                + Environment.NewLine
+                + diffText;
 
             return new ToolApprovalPreview(
                 previewText,
