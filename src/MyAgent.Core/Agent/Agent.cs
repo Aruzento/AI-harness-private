@@ -124,9 +124,21 @@ public class Agent
                     if (_policy.RequiresApproval(
                             toolCall.Name))
                     {
+                        ToolApprovalPreview approvalPreview =
+                            await _toolRegistry
+                                .CreateApprovalPreviewAsync(
+                                    toolCall.Name,
+                                    toolCall.Arguments,
+                                    cancellationToken);
+
+                        var approvalRequest =
+                            new ToolApprovalRequest(
+                                toolCall,
+                                approvalPreview);
+
                         bool approved =
                             await _toolApproval.ApproveAsync(
-                                toolCall,
+                                approvalRequest,
                                 cancellationToken);
 
                         if (!approved)

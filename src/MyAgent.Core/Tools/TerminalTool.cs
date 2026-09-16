@@ -1,11 +1,14 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using MyAgent.Guardrails;
 using MyAgent.Workspace;
 
 namespace MyAgent.Tools;
 
-public class TerminalTool : ITool
+public class TerminalTool
+    : ITool,
+      IToolApprovalPreviewProvider
 {
     private readonly int _timeoutSeconds;
 
@@ -57,6 +60,34 @@ public class TerminalTool : ITool
 
         _timeoutSeconds =
             timeoutSeconds;
+    }
+
+    public Task<ToolApprovalPreview>
+        CreateApprovalPreviewAsync(
+            JsonElement arguments,
+            CancellationToken cancellationToken = default)
+    {
+        cancellationToken
+            .ThrowIfCancellationRequested();
+
+        string previewText =
+            arguments.GetRawText();
+
+        if (arguments.TryGetProperty(
+                "command",
+                out JsonElement commandElement)
+            &&
+            commandElement.ValueKind ==
+                JsonValueKind.String)
+        {
+            previewText =
+                commandElement.GetString()
+                ?? string.Empty;
+        }
+
+        return Task.FromResult(
+            new ToolApprovalPreview(
+                previewText));
     }
 
     public async Task<ToolResult> ExecuteAsync(

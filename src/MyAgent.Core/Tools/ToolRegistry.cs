@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MyAgent.Guardrails;
 
 namespace MyAgent.Tools;
 
@@ -11,7 +12,8 @@ public class ToolRegistry
     public IReadOnlyCollection<ITool> Tools =>
         _tools.Values;
 
-    public void Register(ITool tool)
+    public void Register(
+        ITool tool)
     {
         if (!_tools.TryAdd(
                 tool.Name,
@@ -20,6 +22,29 @@ public class ToolRegistry
             throw new InvalidOperationException(
                 $"Tool '{tool.Name}' is already registered.");
         }
+    }
+
+    public async Task<ToolApprovalPreview>
+        CreateApprovalPreviewAsync(
+            string toolName,
+            JsonElement arguments,
+            CancellationToken cancellationToken = default)
+    {
+        if (!_tools.TryGetValue(
+                toolName,
+                out ITool? tool)
+            ||
+            tool is not IToolApprovalPreviewProvider
+                previewProvider)
+        {
+            return new ToolApprovalPreview(
+                arguments.GetRawText());
+        }
+
+        return await previewProvider
+            .CreateApprovalPreviewAsync(
+                arguments,
+                cancellationToken);
     }
 
     public async Task<ToolResult> ExecuteAsync(

@@ -1,9 +1,12 @@
 using System.Text.Json;
+using MyAgent.Guardrails;
 using MyAgent.Workspace;
 
 namespace MyAgent.Tools;
 
-public class EditFileTool : ITool
+public class EditFileTool
+    : ITool,
+      IToolApprovalPreviewProvider
 {
     private readonly AgentWorkspace _workspace;
 
@@ -64,6 +67,167 @@ public class EditFileTool : ITool
     {
         _workspace =
             workspace;
+    }
+
+    public async Task<ToolApprovalPreview>
+        CreateApprovalPreviewAsync(
+            JsonElement arguments,
+            CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            cancellationToken
+                .ThrowIfCancellationRequested();
+
+            if (!TryReadString(
+                    arguments,
+                    "path",
+                    out string path)
+                ||
+                !TryReadString(
+                    arguments,
+                    "old_text",
+                    out string oldText)
+                ||
+                !TryReadString(
+                    arguments,
+                    "new_text",
+                    out string newText))
+            {
+                return new ToolApprovalPreview(
+                    arguments.GetRawText());
+            }
+
+            if (string.IsNullOrEmpty(
+                    oldText))
+            {
+                return new ToolApprovalPreview(
+                    "Файл: "
+                    + path
+                    + Environment.NewLine
+                    + Environment.NewLine
+                    + "Не удалось подготовить изменение: "
+                    + "old_text cannot be empty.");
+            }
+
+            string fullPath =
+                _workspace.ResolvePath(
+                    path);
+
+            if (!File.Exists(
+                    fullPath))
+            {
+                return new ToolApprovalPreview(
+                    "Файл: "
+                    + path
+                    + Environment.NewLine
+                    + Environment.NewLine
+                    + "Не удалось подготовить изменение: "
+                    + "файл не существует.");
+            }
+
+            string oldContent =
+                await File.ReadAllTextAsync(
+                    fullPath,
+                    cancellationToken);
+
+            int firstIndex =
+                oldContent.IndexOf(
+                    oldText,
+                    StringComparison.Ordinal);
+
+            if (firstIndex < 0)
+            {
+                return new ToolApprovalPreview(
+                    "Файл: "
+                    + path
+                    + Environment.NewLine
+                    + Environment.NewLine
+                    + "Не удалось подготовить изменение: "
+                    + "old_text не найден.");
+            }
+
+            int secondIndex =
+                oldContent.IndexOf(
+                    oldText,
+                    firstIndex + oldText.Length,
+                    StringComparison.Ordinal);
+
+            if (secondIndex >= 0)
+            {
+                return new ToolApprovalPreview(
+                    "Файл: "
+                    + path
+                    + Environment.NewLine
+                    + Environment.NewLine
+                    + "Не удалось подготовить изменение: "
+                    + "old_text встречается больше одного раза.");
+            }
+
+            if (string.Equals(
+                    oldText,
+                    newText,
+                    StringComparison.Ordinal))
+            {
+                return new ToolApprovalPreview(
+                    "Файл: "
+                    + path
+                    + Environment.NewLine
+                    + Environment.NewLine
+                    + "Не удалось подготовить изменение: "
+                    + "старый и новый текст идентичны.");
+            }
+
+            string newContent =
+                oldContent
+                    .Remove(
+                        firstIndex,
+                        oldText.Length)
+                    .Insert(
+                        firstIndex,
+                        newText);
+
+            string newPreview =
+                newText.Length == 0
+                    ? "(пусто — фрагмент будет удалён)"
+                    : newText;
+
+            string previewText =
+                "Файл: "
+                + path
+                + Environment.NewLine
+                + Environment.NewLine
+                + "--- Текущий фрагмент"
+                + Environment.NewLine
+                + oldText
+                + Environment.NewLine
+                + Environment.NewLine
+                + "+++ Новый фрагмент"
+                + Environment.NewLine
+                + newPreview;
+
+            return new ToolApprovalPreview(
+                previewText,
+                new FileChangePreview(
+                    path,
+                    oldContent,
+                    newContent));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            return new ToolApprovalPreview(
+                "Не удалось подготовить preview."
+                + Environment.NewLine
+                + Environment.NewLine
+                + exception.Message
+                + Environment.NewLine
+                + Environment.NewLine
+                + arguments.GetRawText());
+        }
     }
 
     public async Task<ToolResult> ExecuteAsync(

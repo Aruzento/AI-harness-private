@@ -1,5 +1,4 @@
 using MyAgent.Guardrails;
-using MyAgent.Messages;
 
 namespace MyAgent.Desktop;
 
@@ -7,14 +6,14 @@ public class DesktopToolApproval
     : IToolApproval
 {
     private readonly Func<
-        ToolCall,
+        ToolApprovalRequest,
         CancellationToken,
         Task<bool>>
         _requestApproval;
 
     public DesktopToolApproval(
         Func<
-            ToolCall,
+            ToolApprovalRequest,
             CancellationToken,
             Task<bool>>
             requestApproval)
@@ -24,11 +23,11 @@ public class DesktopToolApproval
     }
 
     public Task<bool> ApproveAsync(
-        ToolCall toolCall,
+        ToolApprovalRequest request,
         CancellationToken cancellationToken = default)
     {
         return _requestApproval(
-            toolCall,
+            request,
             cancellationToken);
     }
 }
