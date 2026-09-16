@@ -7,7 +7,8 @@ namespace MyAgent.Tools;
 
 public class EditFileTool
     : ITool,
-      IToolApprovalPreviewProvider
+      IToolApprovalPreviewProvider,
+      IApprovedToolExecutor
 {
     private readonly AgentWorkspace _workspace;
 
@@ -229,6 +230,117 @@ public class EditFileTool
                 + Environment.NewLine
                 + Environment.NewLine
                 + arguments.GetRawText());
+        }
+    }
+
+    public async Task<ToolResult>
+        ExecuteApprovedAsync(
+            JsonElement arguments,
+            ToolApprovalPreview preview,
+            CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            cancellationToken
+                .ThrowIfCancellationRequested();
+
+            FileChangePreview? fileChange =
+                preview.FileChange;
+
+            if (fileChange is null)
+            {
+                return ToolResult.Fail(
+                    "Approved file change preview is unavailable.");
+            }
+
+            if (!TryReadString(
+                    arguments,
+                    "path",
+                    out string path))
+            {
+                return ToolResult.Fail(
+                    "Missing parameter: path.");
+            }
+
+            if (!string.Equals(
+                    path,
+                    fileChange.Path,
+                    StringComparison.Ordinal))
+            {
+                return ToolResult.Fail(
+                    "Approved file path does not match tool arguments.");
+            }
+
+            if (fileChange.OldContent is null)
+            {
+                return ToolResult.Fail(
+                    "edit_file requires an existing file.");
+            }
+
+            string fullPath =
+                _workspace.ResolvePath(
+                    path);
+
+            if (!File.Exists(
+                    fullPath))
+            {
+                return ToolResult.Fail(
+                    "File changed after approval preview. "
+                    + "The approved edit was not applied.");
+            }
+
+            string currentContent =
+                await File.ReadAllTextAsync(
+                    fullPath,
+                    cancellationToken);
+
+            if (!string.Equals(
+                    currentContent,
+                    fileChange.OldContent,
+                    StringComparison.Ordinal))
+            {
+                return ToolResult.Fail(
+                    "File changed after approval preview. "
+                    + "The approved edit was not applied.");
+            }
+
+            await File.WriteAllTextAsync(
+                fullPath,
+                fileChange.NewContent,
+                cancellationToken);
+
+            string result =
+                $"File edited: {path}";
+
+            if (TryReadString(
+                    arguments,
+                    "old_text",
+                    out string oldText)
+                &&
+                TryReadString(
+                    arguments,
+                    "new_text",
+                    out string newText))
+            {
+                result +=
+                    Environment.NewLine
+                    + Environment.NewLine
+                    + BuildDiff(
+                        oldText,
+                        newText);
+            }
+
+            return ToolResult.Ok(
+                result);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            return ToolResult.Fail(
+                exception.Message);
         }
     }
 

@@ -47,6 +47,36 @@ public class ToolRegistry
                 cancellationToken);
     }
 
+    public async Task<ToolResult>
+        ExecuteApprovedAsync(
+            string toolName,
+            JsonElement arguments,
+            ToolApprovalPreview preview,
+            CancellationToken cancellationToken = default)
+    {
+        if (!_tools.TryGetValue(
+                toolName,
+                out ITool? tool))
+        {
+            return ToolResult.Fail(
+                $"Unknown tool: {toolName}");
+        }
+
+        if (tool is IApprovedToolExecutor
+            approvedExecutor)
+        {
+            return await approvedExecutor
+                .ExecuteApprovedAsync(
+                    arguments,
+                    preview,
+                    cancellationToken);
+        }
+
+        return await tool.ExecuteAsync(
+            arguments,
+            cancellationToken);
+    }
+
     public async Task<ToolResult> ExecuteAsync(
         string toolName,
         JsonElement arguments,

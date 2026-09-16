@@ -7,7 +7,8 @@ namespace MyAgent.Tools;
 
 public class WriteFileTool
     : ITool,
-      IToolApprovalPreviewProvider
+      IToolApprovalPreviewProvider,
+      IApprovedToolExecutor
 {
     private readonly AgentWorkspace _workspace;
 
@@ -188,6 +189,120 @@ public class WriteFileTool
                 + Environment.NewLine
                 + Environment.NewLine
                 + arguments.GetRawText());
+        }
+    }
+
+    public async Task<ToolResult>
+        ExecuteApprovedAsync(
+            JsonElement arguments,
+            ToolApprovalPreview preview,
+            CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            cancellationToken
+                .ThrowIfCancellationRequested();
+
+            FileChangePreview? fileChange =
+                preview.FileChange;
+
+            if (fileChange is null)
+            {
+                return ToolResult.Fail(
+                    "Approved file change preview is unavailable.");
+            }
+
+            if (!arguments.TryGetProperty(
+                    "path",
+                    out JsonElement pathElement)
+                ||
+                pathElement.ValueKind !=
+                    JsonValueKind.String)
+            {
+                return ToolResult.Fail(
+                    "Missing parameter: path.");
+            }
+
+            string path =
+                pathElement.GetString()
+                ?? string.Empty;
+
+            if (!string.Equals(
+                    path,
+                    fileChange.Path,
+                    StringComparison.Ordinal))
+            {
+                return ToolResult.Fail(
+                    "Approved file path does not match tool arguments.");
+            }
+
+            string fullPath =
+                _workspace.ResolvePath(
+                    path);
+
+            if (fileChange.OldContent is null)
+            {
+                if (File.Exists(
+                        fullPath))
+                {
+                    return ToolResult.Fail(
+                        "File appeared after approval preview. "
+                        + "The approved write was not applied.");
+                }
+            }
+            else
+            {
+                if (!File.Exists(
+                        fullPath))
+                {
+                    return ToolResult.Fail(
+                        "File changed after approval preview. "
+                        + "The approved write was not applied.");
+                }
+
+                string currentContent =
+                    await File.ReadAllTextAsync(
+                        fullPath,
+                        cancellationToken);
+
+                if (!string.Equals(
+                        currentContent,
+                        fileChange.OldContent,
+                        StringComparison.Ordinal))
+                {
+                    return ToolResult.Fail(
+                        "File changed after approval preview. "
+                        + "The approved write was not applied.");
+                }
+            }
+
+            string? directory =
+                Path.GetDirectoryName(
+                    fullPath);
+
+            if (!string.IsNullOrWhiteSpace(
+                    directory))
+            {
+                Directory.CreateDirectory(
+                    directory);
+            }
+
+            await File.WriteAllTextAsync(
+                fullPath,
+                fileChange.NewContent,
+                cancellationToken);
+
+            return ToolResult.Ok(
+                $"File written: {path}");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            return ToolResult.Fail(
+                exception.Message);
         }
     }
 

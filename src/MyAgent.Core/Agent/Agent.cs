@@ -152,10 +152,12 @@ public class Agent
                         else
                         {
                             toolResult =
-                                await _toolRegistry.ExecuteAsync(
-                                    toolCall.Name,
-                                    toolCall.Arguments,
-                                    cancellationToken);
+                                await _toolRegistry
+                                    .ExecuteApprovedAsync(
+                                        toolCall.Name,
+                                        toolCall.Arguments,
+                                        approvalPreview,
+                                        cancellationToken);
                         }
                     }
                     else
