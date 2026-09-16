@@ -22,8 +22,8 @@ public class ConsoleToolApproval
 
         Console.WriteLine();
 
-        Console.WriteLine(
-            request.Preview.Text);
+        WritePreview(
+            request);
 
         Console.WriteLine();
 
@@ -48,5 +48,111 @@ public class ConsoleToolApproval
 
         return Task.FromResult(
             approved);
+    }
+
+    private static void WritePreview(
+        ToolApprovalRequest request)
+    {
+        if (request.Preview.FileChange
+            is null)
+        {
+            Console.WriteLine(
+                request.Preview.Text);
+
+            return;
+        }
+
+        string normalized =
+            request.Preview.Text
+                .Replace(
+                    "\r\n",
+                    "\n")
+                .Replace(
+                    '\r',
+                    '\n');
+
+        string[] lines =
+            normalized.Split(
+                '\n');
+
+        foreach (string line in lines)
+        {
+            WriteDiffLine(
+                line);
+        }
+    }
+
+    private static void WriteDiffLine(
+        string line)
+    {
+        if (line.StartsWith(
+                "+ ",
+                StringComparison.Ordinal))
+        {
+            WriteColoredLine(
+                line,
+                ConsoleColor.Green);
+
+            return;
+        }
+
+        if (line.StartsWith(
+                "- ",
+                StringComparison.Ordinal))
+        {
+            WriteColoredLine(
+                line,
+                ConsoleColor.Red);
+
+            return;
+        }
+
+        if (line.StartsWith(
+                "@@",
+                StringComparison.Ordinal))
+        {
+            WriteColoredLine(
+                line,
+                ConsoleColor.Cyan);
+
+            return;
+        }
+
+        if (string.Equals(
+                line,
+                "...",
+                StringComparison.Ordinal))
+        {
+            WriteColoredLine(
+                line,
+                ConsoleColor.DarkGray);
+
+            return;
+        }
+
+        Console.WriteLine(
+            line);
+    }
+
+    private static void WriteColoredLine(
+        string text,
+        ConsoleColor foregroundColor)
+    {
+        ConsoleColor previousColor =
+            Console.ForegroundColor;
+
+        try
+        {
+            Console.ForegroundColor =
+                foregroundColor;
+
+            Console.WriteLine(
+                text);
+        }
+        finally
+        {
+            Console.ForegroundColor =
+                previousColor;
+        }
     }
 }
