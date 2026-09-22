@@ -471,12 +471,16 @@ public partial class MainWindow : Window
             return;
         }
 
+        string workspacePath =
+            _activeProject?.WorkspacePath
+            ?? _options.WorkspacePath;
+
         StatusTextBlock.Text =
             _activeProfile.Name
             + " · "
             + _activeProfile.Model
             + " · "
-            + _options.WorkspacePath;
+            + workspacePath;
     }
 
     private void LoadChatItems(
@@ -605,9 +609,28 @@ public partial class MainWindow : Window
                             previousActiveProfileId,
                             StringComparison.Ordinal));
 
+        AgentProject currentProject =
+            _activeProject
+            ?? throw new InvalidOperationException(
+                "Active project is unavailable.");
+
+        var settingsOptions =
+            new HarnessOptions(
+                workspacePath:
+                    currentProject.WorkspacePath,
+
+                maxSteps:
+                    _options.MaxSteps,
+
+                maxToolCalls:
+                    _options.MaxToolCalls,
+
+                terminalTimeoutSeconds:
+                    _options.TerminalTimeoutSeconds);
+
         var settingsWindow =
             new SettingsWindow(
-                _options,
+                settingsOptions,
                 _llmProfileManager,
                 _llmCatalog)
             {
@@ -680,21 +703,69 @@ public partial class MainWindow : Window
                 ?? throw new InvalidOperationException(
                     "Active chat is unavailable.");
 
+            string workspacePath =
+                activeProject.WorkspacePath;
+
+            HarnessOptions effectiveOptions =
+                newOptions;
+
+            if (generalSettingsChanged)
+            {
+                workspacePath =
+                    Path.GetFullPath(
+                        newOptions.WorkspacePath.Trim());
+
+                if (!Directory.Exists(
+                        workspacePath))
+                {
+                    throw new DirectoryNotFoundException(
+                        "Workspace directory does not exist: "
+                        + workspacePath);
+                }
+
+                effectiveOptions =
+                    new HarnessOptions(
+                        workspacePath:
+                            workspacePath,
+
+                        maxSteps:
+                            newOptions.MaxSteps,
+
+                        maxToolCalls:
+                            newOptions.MaxToolCalls,
+
+                        terminalTimeoutSeconds:
+                            newOptions.TerminalTimeoutSeconds);
+            }
+
             AgentCore newAgent =
                 await CreateAgentAsync(
-                    newOptions,
+                    effectiveOptions,
                     newActiveProfile,
-                    newOptions.WorkspacePath,
+                    workspacePath,
                     activeChat.Messages);
 
             if (generalSettingsChanged)
             {
+                ProjectCatalog updatedProjects =
+                    await _projectManager.RelinkWorkspaceAsync(
+                        activeProject.Id,
+                        workspacePath);
+
+                _activeProject =
+                    updatedProjects.Projects.Single(
+                        project =>
+                            string.Equals(
+                                project.Id,
+                                activeProject.Id,
+                                StringComparison.Ordinal));
+
                 HarnessOptions.Save(
-                    newOptions);
+                    effectiveOptions);
             }
 
             _options =
-                newOptions;
+                effectiveOptions;
 
             _llmCatalog =
                 newCatalog;
@@ -707,9 +778,11 @@ public partial class MainWindow : Window
 
             _items.Clear();
 
+            LoadChatItems(
+                activeChat);
+
             AddActivity(
-                "✓ Настройки применены. "
-                + "Начата новая сессия.");
+                "✓ Настройки применены.");
 
             UpdateStatus();
         }
