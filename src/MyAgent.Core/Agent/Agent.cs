@@ -22,13 +22,21 @@ public class Agent
         private set;
     }
 
+    public Message[]
+        CreatePersistentHistorySnapshot()
+    {
+        return _history
+            .CreatePersistentSnapshot();
+    }
+
     public Agent(
         ILlmClient llmClient,
         ToolRegistry toolRegistry,
         AgentPolicy policy,
         IToolApproval toolApproval,
         IAgentObserver observer,
-        string systemPrompt)
+        string systemPrompt,
+        IReadOnlyList<Message>? initialMessages = null)
     {
         _llmClient = llmClient;
         _toolRegistry = toolRegistry;
@@ -41,6 +49,12 @@ public class Agent
 
         _history.AddSystem(
             systemPrompt);
+
+        if (initialMessages is not null)
+        {
+            _history.AddPersistentMessages(
+                initialMessages);
+        }
     }
 
     public async Task<LlmResponse> RunAsync(
