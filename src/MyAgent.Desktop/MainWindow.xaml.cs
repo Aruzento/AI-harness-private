@@ -12,6 +12,8 @@ using MyAgent.Tools;
 using MyAgent.Workspace;
 using System.Windows.Input;
 using MyAgent.Secrets;
+using MyAgent.Chats;
+using MyAgent.Projects;
 
 using AgentCore = MyAgent.Agent.Agent;
 
@@ -37,6 +39,16 @@ public partial class MainWindow : Window
 
     private readonly ILlmClientFactory
         _llmClientFactory;
+
+    private readonly ProjectManager
+        _projectManager;
+
+    private readonly ChatManager
+        _chatManager;
+
+    private AgentProject? _activeProject;
+
+    private AgentChat? _activeChat;
 
     private LlmProfileCatalog _llmCatalog =
         new();
@@ -78,6 +90,21 @@ public partial class MainWindow : Window
 
         _httpClient =
     new HttpClient();
+
+    var projectStore =
+        new ProjectStore();
+
+    _projectManager =
+        new ProjectManager(
+            projectStore);
+
+    var chatStore =
+        new ChatStore();
+
+    _chatManager =
+        new ChatManager(
+            chatStore,
+            projectStore);
 
     var profileStore =
         new LlmProfileStore();
@@ -135,10 +162,27 @@ public partial class MainWindow : Window
                 GetActiveProfile(
                     _llmCatalog);
 
+            await EnsureDesktopSessionAsync();
+
+            AgentProject activeProject =
+                _activeProject
+                ?? throw new InvalidOperationException(
+                    "Active project is unavailable.");
+
+            AgentChat activeChat =
+                _activeChat
+                ?? throw new InvalidOperationException(
+                    "Active chat is unavailable.");
+
             _agent =
                 await CreateAgentAsync(
                     _options,
-                    _activeProfile);
+                    _activeProfile,
+                    activeProject.WorkspacePath,
+                    activeChat.Messages);
+
+            LoadChatItems(
+                activeChat);
 
             UpdateStatus();
 
@@ -177,9 +221,143 @@ public partial class MainWindow : Window
         }
     }
 
+    private async Task EnsureDesktopSessionAsync(
+        CancellationToken cancellationToken = default)
+    {
+        ProjectCatalog projectCatalog =
+            await _projectManager.LoadAsync(
+                cancellationToken);
+
+        AgentProject? activeProject =
+            projectCatalog.Projects
+                .FirstOrDefault(
+                    project =>
+                        string.Equals(
+                            project.Id,
+                            projectCatalog.ActiveProjectId,
+                            StringComparison.Ordinal));
+
+        if (activeProject is null
+            && projectCatalog.Projects.Length > 0)
+        {
+            activeProject =
+                projectCatalog.Projects[0];
+
+            projectCatalog =
+                await _projectManager.SetActiveAsync(
+                    activeProject.Id,
+                    cancellationToken);
+        }
+
+        if (activeProject is null)
+        {
+            string initialWorkspacePath =
+                Path.GetFullPath(
+                    _options.WorkspacePath);
+
+            projectCatalog =
+                await _projectManager.AddAsync(
+                    GetInitialProjectName(
+                        initialWorkspacePath),
+                    initialWorkspacePath,
+                    makeActive: true,
+                    cancellationToken);
+
+            activeProject =
+                projectCatalog.Projects.Single(
+                    project =>
+                        string.Equals(
+                            project.Id,
+                            projectCatalog.ActiveProjectId,
+                            StringComparison.Ordinal));
+        }
+
+        _activeProject =
+            activeProject;
+
+        ChatCatalog chatCatalog =
+            await _chatManager.LoadAsync(
+                cancellationToken);
+
+        AgentChat? activeChat =
+            chatCatalog.Chats
+                .FirstOrDefault(
+                    chat =>
+                        string.Equals(
+                            chat.Id,
+                            chatCatalog.ActiveChatId,
+                            StringComparison.Ordinal)
+                        &&
+                        string.Equals(
+                            chat.ProjectId,
+                            activeProject.Id,
+                            StringComparison.Ordinal));
+
+        if (activeChat is null)
+        {
+            IReadOnlyList<AgentChat> projectChats =
+                await _chatManager.GetProjectChatsAsync(
+                    activeProject.Id,
+                    cancellationToken);
+
+            activeChat =
+                projectChats.FirstOrDefault();
+
+            if (activeChat is not null)
+            {
+                await _chatManager.SetActiveAsync(
+                    activeChat.Id,
+                    cancellationToken);
+            }
+        }
+
+        if (activeChat is null)
+        {
+            chatCatalog =
+                await _chatManager.AddAsync(
+                    activeProject.Id,
+                    "Новый чат",
+                    makeActive: true,
+                    cancellationToken);
+
+            activeChat =
+                chatCatalog.Chats.Single(
+                    chat =>
+                        string.Equals(
+                            chat.Id,
+                            chatCatalog.ActiveChatId,
+                            StringComparison.Ordinal));
+        }
+
+        _activeChat =
+            activeChat;
+    }
+
+    private static string GetInitialProjectName(
+        string workspacePath)
+    {
+        string fullPath =
+            Path.GetFullPath(
+                workspacePath);
+
+        string trimmedPath =
+            Path.TrimEndingDirectorySeparator(
+                fullPath);
+
+        string name =
+            Path.GetFileName(
+                trimmedPath);
+
+        return string.IsNullOrWhiteSpace(name)
+            ? fullPath
+            : name;
+    }
+
     private async Task<AgentCore> CreateAgentAsync(
         HarnessOptions options,
         LlmProfile profile,
+        string workspacePath,
+        IReadOnlyList<Message>? initialMessages = null,
         CancellationToken cancellationToken = default)
     {
         ILlmClient llmClient =
@@ -189,7 +367,7 @@ public partial class MainWindow : Window
 
         var workspace =
             new AgentWorkspace(
-                options.WorkspacePath);
+                workspacePath);
 
         var toolRegistry =
             new ToolRegistry();
@@ -238,7 +416,8 @@ public partial class MainWindow : Window
             policy,
             toolApproval,
             observer,
-            _systemPrompt);
+            _systemPrompt,
+            initialMessages);
     }
 
     private static LlmProfile GetActiveProfile(
@@ -298,6 +477,42 @@ public partial class MainWindow : Window
             + _activeProfile.Model
             + " · "
             + _options.WorkspacePath;
+    }
+
+    private void LoadChatItems(
+        AgentChat chat)
+    {
+        _items.Clear();
+
+        foreach (Message message
+                in chat.Messages)
+        {
+            if (message.Role ==
+                MessageRole.User
+                &&
+                !string.IsNullOrWhiteSpace(
+                    message.Content))
+            {
+                AddChatItem(
+                    new UserMessageItem(
+                        message.Content));
+
+                continue;
+            }
+
+            if (message.Role ==
+                MessageRole.Assistant
+                &&
+                message.ToolCalls.Count == 0
+                &&
+                !string.IsNullOrWhiteSpace(
+                    message.Content))
+            {
+                AddChatItem(
+                    new AssistantMessageItem(
+                        message.Content));
+            }
+        }
     }
 
     private void AddActivity(
@@ -455,10 +670,22 @@ public partial class MainWindow : Window
                 GetActiveProfile(
                     newCatalog);
 
+            AgentProject activeProject =
+                _activeProject
+                ?? throw new InvalidOperationException(
+                    "Active project is unavailable.");
+
+            AgentChat activeChat =
+                _activeChat
+                ?? throw new InvalidOperationException(
+                    "Active chat is unavailable.");
+
             AgentCore newAgent =
                 await CreateAgentAsync(
                     newOptions,
-                    newActiveProfile);
+                    newActiveProfile,
+                    newOptions.WorkspacePath,
+                    activeChat.Messages);
 
             if (generalSettingsChanged)
             {
@@ -543,6 +770,29 @@ public partial class MainWindow : Window
         await SendCurrentInputAsync();
     }
 
+    private async Task PersistActiveChatAsync(
+        AgentCore agent)
+    {
+        AgentChat activeChat =
+            _activeChat
+            ?? throw new InvalidOperationException(
+                "Active chat is unavailable.");
+
+        ChatCatalog updatedCatalog =
+            await _chatManager.ReplaceMessagesAsync(
+                activeChat.Id,
+                agent.CreatePersistentHistorySnapshot(),
+                CancellationToken.None);
+
+        _activeChat =
+            updatedCatalog.Chats.Single(
+                chat =>
+                    string.Equals(
+                        chat.Id,
+                        activeChat.Id,
+                        StringComparison.Ordinal));
+    }
+
     private async Task SendCurrentInputAsync()
     {
         if (_runCancellation is not null)
@@ -607,6 +857,9 @@ public partial class MainWindow : Window
                 new AssistantMessageItem(
                     response.Content
                     ?? string.Empty));
+
+            await PersistActiveChatAsync(
+                agent);
         }
         catch (OperationCanceledException)
         {
@@ -730,13 +983,37 @@ public partial class MainWindow : Window
                 GetActiveProfile(
                     _llmCatalog);
 
+            AgentProject activeProject =
+                _activeProject
+                ?? throw new InvalidOperationException(
+                    "Active project is unavailable.");
+
             AgentCore newAgent =
                 await CreateAgentAsync(
                     _options,
-                    activeProfile);
+                    activeProfile,
+                    activeProject.WorkspacePath,
+                    Array.Empty<Message>());
+
+            ChatCatalog chatCatalog =
+                await _chatManager.AddAsync(
+                    activeProject.Id,
+                    "Новый чат",
+                    makeActive: true);
+
+            AgentChat newChat =
+                chatCatalog.Chats.Single(
+                    chat =>
+                        string.Equals(
+                            chat.Id,
+                            chatCatalog.ActiveChatId,
+                            StringComparison.Ordinal));
 
             _activeProfile =
                 activeProfile;
+
+            _activeChat =
+                newChat;
 
             _agent =
                 newAgent;
